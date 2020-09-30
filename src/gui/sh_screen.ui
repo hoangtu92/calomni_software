@@ -1,0 +1,477 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>987</width>
+    <height>1035</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <layout class="QVBoxLayout" name="body">
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout">
+       <item>
+        <widget class="QWidget" name="left" native="true">
+         <property name="minimumSize">
+          <size>
+           <width>200</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>200</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_5">
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_4">
+            <item>
+             <spacer name="verticalSpacer_2">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeType">
+               <enum>QSizePolicy::Fixed</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>10</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QLabel" name="logo">
+              <property name="text">
+               <string/>
+              </property>
+              <property name="pixmap">
+               <pixmap>images/medium/logo-blue.png</pixmap>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="verticalSpacer">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeType">
+               <enum>QSizePolicy::Fixed</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>10</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="search">
+              <property name="styleSheet">
+               <string notr="true">padding: 7px 15px;</string>
+              </property>
+              <property name="placeholderText">
+               <string>Search for...</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QVBoxLayout" name="filter_buttons">
+              <item>
+               <widget class="QPushButton" name="reset_filter">
+                <property name="text">
+                 <string>Reset</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="A">
+                <property name="text">
+                 <string>A</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="B">
+                <property name="text">
+                 <string>B</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="C">
+                <property name="text">
+                 <string>C</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="D">
+                <property name="text">
+                 <string>D</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="E">
+                <property name="text">
+                 <string>E</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="F">
+                <property name="text">
+                 <string>F</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="G">
+                <property name="text">
+                 <string>G</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="H">
+                <property name="text">
+                 <string>H</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="I">
+                <property name="text">
+                 <string>I</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="J">
+                <property name="text">
+                 <string>J</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="K">
+                <property name="text">
+                 <string>K</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="L">
+                <property name="text">
+                 <string>L</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="M">
+                <property name="text">
+                 <string>M</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="N">
+                <property name="text">
+                 <string>N</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="O">
+                <property name="text">
+                 <string>O</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="P">
+                <property name="text">
+                 <string>P</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="Q">
+                <property name="text">
+                 <string>Q</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="R">
+                <property name="text">
+                 <string>R</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="S">
+                <property name="text">
+                 <string>S</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="T">
+                <property name="text">
+                 <string>T</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="U">
+                <property name="text">
+                 <string>U</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="V">
+                <property name="text">
+                 <string>V</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="W">
+                <property name="text">
+                 <string>W</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="X">
+                <property name="text">
+                 <string>X</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="Y">
+                <property name="text">
+                 <string>Y</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="Z">
+                <property name="text">
+                 <string>Z</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="verticalSpacer_3">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>40</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="Line" name="line">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QVBoxLayout" name="right">
+         <item>
+          <widget class="QWidget" name="actions" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>70</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>70</height>
+            </size>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout">
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_2">
+              <property name="sizeConstraint">
+               <enum>QLayout::SetDefaultConstraint</enum>
+              </property>
+              <item>
+               <spacer name="horizontalSpacer_2">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="save_btn">
+                <property name="styleSheet">
+                 <string notr="true">background-color: rgb(78, 154, 6);
+color: white;
+padding: 10px 20px;</string>
+                </property>
+                <property name="text">
+                 <string>Save</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeType">
+                 <enum>QSizePolicy::Fixed</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>20</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="save_check_btn">
+                <property name="styleSheet">
+                 <string notr="true">background-color: rgb(0, 197, 204);
+color: white;
+padding: 10px 20px;</string>
+                </property>
+                <property name="text">
+                 <string>Save / Check</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_3">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeType">
+                 <enum>QSizePolicy::Fixed</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>20</width>
+                  <height>10</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="online_offline_btn">
+                <property name="styleSheet">
+                 <string notr="true">background-color: #ff257e;
+color: white;
+padding: 10px 20px;</string>
+                </property>
+                <property name="text">
+                 <string>Online / Offline</string>
+                </property>
+                <property name="flat">
+                 <bool>false</bool>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="Line" name="line_2">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QWidget" name="content" native="true"/>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+   <item row="1" column="0">
+    <widget class="QWidget" name="bottom" native="true">
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>60</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background: rgba(123, 255, 56, 186)</string>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_3">
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout_2">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="sizeConstraint">
+         <enum>QLayout::SetFixedSize</enum>
+        </property>
+        <item>
+         <widget class="QLabel" name="status">
+          <property name="text">
+           <string>Status: Idle</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
