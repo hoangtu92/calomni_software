@@ -18,7 +18,7 @@
    </font>
   </property>
   <property name="windowTitle">
-   <string>RH Login</string>
+   <string>Calomni Login</string>
   </property>
   <property name="windowOpacity">
    <double>1.000000000000000</double>
@@ -147,7 +147,7 @@
          </size>
         </property>
         <property name="inputMethodHints">
-         <set>Qt::ImhNone</set>
+         <set>Qt::ImhHiddenText|Qt::ImhNoAutoUppercase|Qt::ImhNoPredictiveText|Qt::ImhSensitiveData</set>
         </property>
         <property name="echoMode">
          <enum>QLineEdit::Password</enum>
@@ -187,7 +187,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QLabel" name="forgotPW">
+       <widget class="QLabel" name="forgot_pw_btn">
         <property name="palette">
          <palette>
           <active>
@@ -642,13 +642,19 @@
          <bool>true</bool>
         </property>
         <property name="text">
-         <string>Forgot Password?</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;https://calomni.com/manager/password/reset&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0000ff;&quot;&gt;Forgot Password?&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="textFormat">
+         <enum>Qt::RichText</enum>
         </property>
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
+        <property name="openExternalLinks">
+         <bool>false</bool>
+        </property>
         <property name="textInteractionFlags">
-         <set>Qt::TextSelectableByMouse</set>
+         <set>Qt::LinksAccessibleByKeyboard|Qt::LinksAccessibleByMouse</set>
         </property>
        </widget>
       </item>
@@ -701,5 +707,25 @@ color: rgb(255, 255, 255);</string>
   </widget>
  </widget>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>forgot_pw_btn</sender>
+   <signal>linkActivated(QString)</signal>
+   <receiver>Login</receiver>
+   <slot>forgotPW()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>464</x>
+     <y>329</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>610</x>
+     <y>38</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>forgotPW()</slot>
+ </slots>
 </ui>

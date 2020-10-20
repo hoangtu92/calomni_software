@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Form</string>
+   <string>SH Dashboard</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
@@ -458,7 +458,7 @@ padding: 10px 20px;</string>
         <item>
          <widget class="QLabel" name="status">
           <property name="text">
-           <string>Status: Idle</string>
+           <string/>
           </property>
           <property name="alignment">
            <set>Qt::AlignCenter</set>

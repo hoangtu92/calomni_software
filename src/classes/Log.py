@@ -20,8 +20,6 @@ class Log:
         self.log.setLevel(logging.DEBUG)
         self.log.addHandler(handler)
 
-        # self.log.basicConfig(filename="%s/logs/%s" % (self.app.home_dir, file_name), level=logging.DEBUG, format='%(asctime)s: %(levelname)s. %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-
     def debug(self, msg, console=None, alert=None):
         self.log.debug(msg)
         self.app_log(msg, console, alert)

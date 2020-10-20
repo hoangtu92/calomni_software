@@ -32,7 +32,7 @@ class Software(QWidget):
 
         self.status.setDisabled(True)
 
-        if self.obj['executable']:
+        if self.obj['executable'] == '1':
             # self.checked.setChecked(True)
             self.status.setText("Verified")
         else:

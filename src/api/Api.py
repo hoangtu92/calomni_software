@@ -1,6 +1,8 @@
 import requests
+from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
 
-from src.classes.Alert import Alert
+def download(url):
+    return requests.get(url, allow_redirects=True).content
 
 
 class Api:
@@ -8,7 +10,8 @@ class Api:
     bearer = None
     user = {}
 
-    def __init__(self):
+    def __init__(self, app):
+        self.app = app
         self.bearer = None
         pass
 
@@ -17,6 +20,7 @@ class Api:
 
     '''Login to the api'''
     def login(self, email, password):
+        self.app.log.info("Login to system")
         resp = requests.post(self.url("/auth/login"), data={'email': email, 'password': password},
                              headers={"Accept": "application/json"})
 
@@ -24,6 +28,7 @@ class Api:
             self.bearer = resp.text
             res = self.get("/user")
             if res['data']:
+                self.app.log.debug("User info: %s" % res['data'])
                 self.user = res['data']
 
     '''Logout'''
@@ -36,12 +41,12 @@ class Api:
         if resp.content:
             result = resp.json()
             if 'status' in result and not result['status']:
-                Alert(result['message'])
-                print(result)
+                self.app.log.error(result['message'], None, True)
+                self.app.log.debug(result)
                 return False
             return result
         else:
-            print(resp.content)
+            self.app.log.error(resp.content)
         return False
 
     '''get request'''
@@ -75,13 +80,17 @@ class Api:
         return self.response(resp)
 
     '''upload'''
-    def upload(self, endpoint, data=None):
+    def upload(self, endpoint, data, callback=None):
 
         if self.bearer is None:
             return False
 
-        resp = requests.post(self.url(endpoint), data=data,
-                             headers={"Content-Type": data.content_type, "Accept": "application/json", "Authorization": "Bearer " + self.bearer})
+        m = MultipartEncoder(fields=data)
+        if callback is not None:
+            m = MultipartEncoderMonitor(m, callback)
+
+        resp = requests.post(self.url(endpoint), data=m,
+                             headers={"Content-Type": m.content_type, "Accept": "application/json", "Authorization": "Bearer " + self.bearer})
         return self.response(resp)
 
     '''delete request'''
@@ -93,3 +102,5 @@ class Api:
                                headers={"Accept": "application/json", "Authorization": "Bearer " + self.bearer})
 
         return self.response(resp)
+
+

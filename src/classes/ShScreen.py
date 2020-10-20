@@ -1,18 +1,17 @@
 import os, platform
-import shutil
-import zipfile
 from os.path import dirname, abspath
+from shutil import make_archive
+from zipfile import ZipFile
 
-import magic
-import requests
+from magic import Magic
+from src.api.Api import download
 from PyQt5 import uic, QtCore
-from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QVBoxLayout, QPushButton, QLineEdit
-from requests_toolbelt import MultipartEncoder
+from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QPushButton, QLineEdit, QLabel
 
+from src.classes.Log import Log
 from src.classes.Software import Software
 import re
 from src.classes.Alert import Alert
-import threading
 
 
 class ShScreen(QWidget):
@@ -20,6 +19,7 @@ class ShScreen(QWidget):
     current_host = None
     items = 0
     cols = 4
+    log = None
 
     def __init__(self, app):
         self.app = app
@@ -31,13 +31,9 @@ class ShScreen(QWidget):
         qr.moveCenter(cp)
         self.move(qr.topLeft())
 
-        if not os.path.isdir(self.app.home_dir):
-            os.mkdir(self.app.home_dir)
+        self.mime = Magic(mime=True)
 
-        if not os.path.isdir(self.app.home_dir + "/environment/"):
-            os.mkdir(self.app.home_dir + "/environment/")
-
-        self.mime = magic.Magic(mime=True)
+        self.host_active = True
 
         # self.software_list = self.findChild(QGridLayout, "software_list")
         self.content = self.findChild(QWidget, "content")
@@ -72,6 +68,10 @@ class ShScreen(QWidget):
             "Y": self.findChild(QPushButton, "Y"),
             "Z": self.findChild(QPushButton, "Z"),
         }
+
+        self.status = self.findChild(QLabel, "status")
+        self.online_offline_btn = self.findChild(QPushButton, "online_offline_btn")
+        self.bottom = self.findChild(QWidget, "bottom")
 
         self.filter_buttons["A"].clicked.connect(lambda: self.get_software_list(self.filter_buttons["A"].text()))
         self.filter_buttons["B"].clicked.connect(lambda: self.get_software_list(self.filter_buttons["B"].text()))
@@ -116,6 +116,7 @@ class ShScreen(QWidget):
         self.cols = round(self.width() / 200)
 
         self.software_list.setColumnStretch(self.cols + 1, 1)
+
 
     def append_software(self, obj):
         # the next free position depends on the number of added items
@@ -170,9 +171,18 @@ class ShScreen(QWidget):
         self.software_list.setRowStretch(self.items / self.cols + 1, 1)
 
     def get_host_info(self):
-        r = self.app.api.get("/host/item/%s" % self.app.mac)
+        r = self.app.api.get("/host/item/%s" % self.app.token)
         if not r:
             r = self.registering_host()
+        else:
+            if r['status'] == 'active':
+                self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
+                self.status.setText("Status: Active")
+                self.host_active = True
+            else:
+                self.host_active = False
+                self.bottom.setStyleSheet("background:red;")
+                self.status.setText("Status: Inactive")
 
         return r
 
@@ -221,7 +231,8 @@ class ShScreen(QWidget):
         return r
         pass
 
-    def load_data(self):
+    def initializing(self):
+        self.log = Log(self.app)
         self.get_host_info()
         self.get_software_list()
         self.fetch_jobs()
@@ -262,49 +273,69 @@ class ShScreen(QWidget):
         pass
 
     def toggle_online_offline(self):
+        if self.host_active:
+            status = 'inactive'
+            self.bottom.setStyleSheet("background:red;")
+            self.status.setText("Status: Inactive")
+            self.host_active = False
+        else:
+            status = 'active'
+            self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
+            self.status.setText("Status: Active")
+            self.host_active = True
+
+        self.app.api.post("/host/item/%s" % self.app.token, {"status" : status})
+
         pass
 
-    def update_job(self, job_id, status, fileName):
+    def update_task(self, job_id, status, file_name = None):
 
-        m = MultipartEncoder(fields={
-            'status': status,
-            'data': (os.path.basename(fileName), open(fileName, 'rb'), self.mime.from_file(fileName))
-        })
+        fields = {
+            'status': status
+        }
+        if file_name is not None:
+            fields['data'] = (os.path.basename(file_name), open(file_name, 'rb'), self.mime.from_file(file_name))
 
-        r = self.app.api.upload("/job/%s/report" % job_id, m)
-        print(r)
+        r = self.app.api.upload("/job/%s/update_task" % job_id, fields)
+        self.log.debug(r)
 
     def fetch_jobs(self):
         QtCore.QTimer.singleShot(5000, self.fetch_jobs)
+
+        if not self.host_active:
+            return
+
         job = self.app.api.get("/job/assignments", {"token": self.app.token})
         if job:
             for j in job:
                 # print(j)
                 # Save all files to environment folder
-                r = requests.get(j['file_url'], allow_redirects=True)
                 f = re.findall(r"(\w+).zip$", j['file_url'])
 
                 path = self.app.home_dir + "/environment/" + f[0]
                 file_name = path + '.zip'
 
-                if not os.path.isdir(path):
-                    # Save file
-                    print("Save file to: " + file_name)
-                    if not os.path.exists(file_name):
-                        open(file_name, "wb").write(r.content)
+                # Begin the task
+                self.update_task(j['job_id'], "running")
 
-                    # Extract file
-                    with zipfile.ZipFile(file_name, 'r') as zip_ref:
-                        zip_ref.extractall(path)
-                        os.popen("chmod +x " + path + "/" + j['run_file']).read()
-                        os.remove(file_name)
+                # Save file
+                self.log.info("Save job file to: " + file_name)
+                job_file = download(j['file_url'])
+                open(file_name, "wb").write(job_file)
 
-                        command = "cd %s; %s" % (path, j['command'])
-                        print(command)
-                        result = os.popen(command).read()
-                        print(result)
+                # Extract file
+                with ZipFile(file_name, 'r') as zip_ref:
+                    zip_ref.extractall(path)
+                    os.popen("chmod +x " + path + "/" + j['run_file']).read()
+                    os.remove(file_name)
 
-                        shutil.make_archive(path, 'zip', path)
-                        self.update_job(j['job_id'], 'completed', file_name)
+                    command = "cd %s; %s" % (path, j['command'])
+                    result = os.popen(command).read()
+                    self.log.debug(result)
+
+                    make_archive(path, 'zip', path)
+
+                    self.update_task(j['job_id'], 'completed', file_name)
 
         pass
+

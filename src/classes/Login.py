@@ -1,8 +1,8 @@
-import os
 from os.path import dirname, abspath
 
 from PyQt5 import uic
-from PyQt5.QtWidgets import QWidget, QLineEdit, QPushButton, QDesktopWidget
+from PyQt5.QtWidgets import QWidget, QLineEdit, QPushButton, QDesktopWidget, QLabel
+import webbrowser
 
 from src.classes.Alert import Alert
 
@@ -46,20 +46,22 @@ class Login(QWidget):
 
         if self.app.api.bearer is not None:
 
-            print(self.app.api.user)
+            self.app.log.debug(self.app.api.user)
 
             self.hide()
 
             if self.app.api.user['role'] == 'rh':
                 self.app.rh_screen.show()
-                self.app.rh_screen.get_data()
+                self.app.rh_screen.initializing()
             elif self.app.api.user['role'] == 'sh':
                 self.app.sh_screen.show()
-                self.app.sh_screen.load_data()
+                self.app.sh_screen.initializing()
 
         else:
-            Alert("Login incorrect", "Error")
+            self.app.log.error("Login incorrect", None, True)
 
     def register(self):
+        webbrowser.open("https://calomni.com")
 
-        self.hide()
+    def forgotPW(self, link):
+        webbrowser.open(link)
