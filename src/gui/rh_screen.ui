@@ -824,29 +824,6 @@ QProgressBar::chunk {
                </property>
               </widget>
              </item>
-             <item>
-              <widget class="QPushButton" name="stopBtn">
-               <property name="text">
-                <string/>
-               </property>
-               <property name="icon">
-                <iconset>
-                 <normaloff>images/medium/stop.png</normaloff>images/medium/stop.png</iconset>
-               </property>
-               <property name="iconSize">
-                <size>
-                 <width>32</width>
-                 <height>32</height>
-                </size>
-               </property>
-               <property name="default">
-                <bool>false</bool>
-               </property>
-               <property name="flat">
-                <bool>true</bool>
-               </property>
-              </widget>
-             </item>
             </layout>
            </item>
            <item row="11" column="1">
@@ -1047,22 +1024,6 @@ p, li { white-space: pre-wrap; }
     <hint type="destinationlabel">
      <x>1673</x>
      <y>136</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>stopBtn</sender>
-   <signal>clicked()</signal>
-   <receiver>RHSoftware</receiver>
-   <slot>stop_job()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>1328</x>
-     <y>554</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>1603</x>
-     <y>159</y>
     </hint>
    </hints>
   </connection>

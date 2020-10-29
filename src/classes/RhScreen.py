@@ -179,38 +179,40 @@ class RhScreen(QWidget):
         jobs = self.app.api.get("/job/list")
         row = 0
         for j in jobs:
-            # print(j)
-            self.job_list.insertRow(self.job_list.rowCount())
 
-            self.job_list.setItem(row, 0, QtWidgets.QTableWidgetItem("%s" % j['id']))
-            self.job_list.setItem(row, 1, QtWidgets.QTableWidgetItem(j['created_at']))
-            self.job_list.setItem(row, 2, QtWidgets.QTableWidgetItem(j['software_name']))
-            self.job_list.setItem(row, 3, QtWidgets.QTableWidgetItem(j["host_info"]))
-            self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem("$NT%s" % j['price']))
-            self.job_list.setItem(row, 5, QtWidgets.QTableWidgetItem(j['status']))
+            if "id" in j:
+                # print(j)
+                self.job_list.insertRow(self.job_list.rowCount())
 
-            if j['status'] == 'completed':
-                dl = QtWidgets.QPushButton()
-                dl.setIcon(QIcon("./src/gui/images/medium/download.png"))
-                dl.clicked.connect(self.download_report)
-                self.job_list.setCellWidget(row, 6, dl)
+                self.job_list.setItem(row, 0, QtWidgets.QTableWidgetItem("%s" % j['id']))
+                self.job_list.setItem(row, 1, QtWidgets.QTableWidgetItem(j['created_at']))
+                self.job_list.setItem(row, 2, QtWidgets.QTableWidgetItem(j['software_name']))
+                self.job_list.setItem(row, 3, QtWidgets.QTableWidgetItem(j["host_info"]))
+                self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem("$NT%s" % j['price']))
+                self.job_list.setItem(row, 5, QtWidgets.QTableWidgetItem(j['status']))
 
-            elif j['status'] == 'pending':
-                stop = QtWidgets.QPushButton()
-                stop.setIcon(QIcon("./src/gui/images/medium/stop.png"))
-                stop.clicked.connect(self.stop_job)
-                self.job_list.setCellWidget(row, 6, stop)
-                pass
+                if j['status'] == 'completed':
+                    dl = QtWidgets.QPushButton()
+                    dl.setIcon(QIcon("./src/gui/images/medium/download.png"))
+                    dl.clicked.connect(self.download_report)
+                    self.job_list.setCellWidget(row, 6, dl)
 
-            elif j['status'] == 'stopped':
-                start = QtWidgets.QPushButton()
-                start.setIcon(QIcon("./src/gui/images/medium/start.png"))
-                start.clicked.connect(self.start_job)
-                self.job_list.setCellWidget(row, 6, start)
+                elif j['status'] == 'pending':
+                    stop = QtWidgets.QPushButton()
+                    stop.setIcon(QIcon("./src/gui/images/medium/stop.png"))
+                    stop.clicked.connect(self.stop_job)
+                    self.job_list.setCellWidget(row, 6, stop)
+                    pass
 
-                pass
+                elif j['status'] == 'stopped':
+                    start = QtWidgets.QPushButton()
+                    start.setIcon(QIcon("./src/gui/images/medium/start.png"))
+                    start.clicked.connect(self.start_job)
+                    self.job_list.setCellWidget(row, 6, start)
 
-            row += 1
+                    pass
+
+                row += 1
 
         # item = QtWidgets.QTableWidgetItem("test3")
         # self.job_list.setVerticalHeaderItem(self.job_list.rowCount() - 1, item)
