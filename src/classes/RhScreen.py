@@ -2,6 +2,8 @@ import os
 import re
 from os.path import dirname, abspath
 
+from PyQt5.QtCore import QSize
+
 from src.api.Api import download
 from PyQt5 import uic, QtCore
 from PyQt5.QtGui import QPixmap, QIcon
@@ -61,7 +63,10 @@ class RhScreen(QWidget):
         self.software.currentIndexChanged.connect(self.software_selected)
         self.host.currentIndexChanged.connect(self.host_selected)
 
+
         # self.job_list.cellClicked.connect(self.download_report)
+
+
 
         self.job = {}
 
@@ -99,10 +104,13 @@ class RhScreen(QWidget):
                         self.set_step(5)
 
     def initializing(self):
+        self.app.job_info_timer.timeout.connect(self.get_job_info)
+        self.app.timer.timeout.connect(self.get_job_list)
+        self.get_job_list()
         self.log = Log(self.app)
         self.log.info("Starting application", self.console)
         self.log.info("Retrieving job list", self.console)
-        self.get_job_list()
+        self.app.timer.start()
         self.log.info("Retrieving Logs", self.console)
         self.get_job_logs()
 
@@ -111,9 +119,11 @@ class RhScreen(QWidget):
     def get_software_list(self):
         self.log.info("Getting software list", self.console)
         sw = self.app.api.get("/software/list")
-        for s in sw:
-            # print(s)
-            self.software.addItem(s['name'], s['id'])
+        if sw:
+            self.clear_software()
+            for s in sw:
+                # print(s)
+                self.software.addItem(s['name'], s['id'])
 
     def get_job_logs(self):
         r = self.app.api.get("/host/logs")
@@ -143,7 +153,12 @@ class RhScreen(QWidget):
             self.log.info("Retrieving verified hosts", self.console)
             self.set_step(2)
 
-            host = self.app.api.get("/software/%d/verified-hosts" % software_id)
+            self.get_hosts(software_id)
+
+    def get_hosts(self, software_id):
+        host = self.app.api.get("/software/%d/verified-hosts" % software_id)
+        if host:
+            self.clear_host()
             for h in host:
                 self.host.addItem("$NT%s: %s" % (h['price'], h['host_info']), h['id'])
 
@@ -157,12 +172,12 @@ class RhScreen(QWidget):
 
     def get_job_info(self):
         if self.job_id:
-            QtCore.QTimer.singleShot(2000, self.get_job_info)
             j = self.app.api.get("/job/%s/item" % self.job_id)
-            self.log.debug("Job Info: %s" % j)
+            # self.log.debug("Job Info: %s" % j)
             self.job_summary.clear()
             self.get_job_logs()
             if j and 'status' in j:
+                self.app.job_info_timer.stop()
                 if j['status'] == 'completed':
                     self.set_step(8)
                     self.job_summary.append("Job finished!!")
@@ -174,48 +189,109 @@ class RhScreen(QWidget):
                     self.job_summary.append("Duration: %s" % j['duration'])
 
     def get_job_list(self):
-        QtCore.QTimer.singleShot(5000, self.get_job_list)
-        self.job_list.setRowCount(0)
         jobs = self.app.api.get("/job/list")
         row = 0
-        for j in jobs:
 
-            if "id" in j:
-                # print(j)
+        if jobs:
+            self.job_list.setRowCount(0)
+            for j in jobs:
                 self.job_list.insertRow(self.job_list.rowCount())
 
-                self.job_list.setItem(row, 0, QtWidgets.QTableWidgetItem("%s" % j['id']))
-                self.job_list.setItem(row, 1, QtWidgets.QTableWidgetItem(j['created_at']))
-                self.job_list.setItem(row, 2, QtWidgets.QTableWidgetItem(j['software_name']))
-                self.job_list.setItem(row, 3, QtWidgets.QTableWidgetItem(j["host_info"]))
-                self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem("$NT%s" % j['price']))
-                self.job_list.setItem(row, 5, QtWidgets.QTableWidgetItem(j['status']))
+                if "id" in j:
+                    self.job_list.setItem(row, 0, QtWidgets.QTableWidgetItem("%s" % j['id']))
+                if "created_at" in j:
+                    self.job_list.setItem(row, 1, QtWidgets.QTableWidgetItem(j['created_at']))
+                if "software_name" in j:
+                    self.job_list.setItem(row, 2, QtWidgets.QTableWidgetItem(j['software_name']))
+                if "host_info" in j:
 
-                if j['status'] == 'completed':
-                    dl = QtWidgets.QPushButton()
-                    dl.setIcon(QIcon("./src/gui/images/medium/download.png"))
-                    dl.clicked.connect(self.download_report)
-                    self.job_list.setCellWidget(row, 6, dl)
+                    g = QtWidgets.QWidget()
+                    l = QtWidgets.QHBoxLayout()
 
-                elif j['status'] == 'pending':
-                    stop = QtWidgets.QPushButton()
-                    stop.setIcon(QIcon("./src/gui/images/medium/stop.png"))
-                    stop.clicked.connect(self.stop_job)
-                    self.job_list.setCellWidget(row, 6, stop)
-                    pass
+                    s = QtWidgets.QLabel()
 
-                elif j['status'] == 'stopped':
-                    start = QtWidgets.QPushButton()
-                    start.setIcon(QIcon("./src/gui/images/medium/start.png"))
-                    start.clicked.connect(self.start_job)
-                    self.job_list.setCellWidget(row, 6, start)
+                    g.setToolTip(j["host_info"])
+                    g.setToolTipDuration(60000)
 
-                    pass
+                    if j['host_activity_status'] == 'active':
+                        pxm = QPixmap("./src/gui/images/medium/online.png")
+                        s.setPixmap(pxm.scaled(8,8, QtCore.Qt.KeepAspectRatio))
+                    else:
+                        pxm = QPixmap("./src/gui/images/medium/offline.png")
+                        s.setPixmap(pxm.scaled(8,8, QtCore.Qt.KeepAspectRatio))
+
+                    n = QtWidgets.QLabel()
+                    n.setText(j["host_name"])
+
+                    l.addWidget(s, 0, QtCore.Qt.AlignCenter)
+                    l.addWidget(n, 0, QtCore.Qt.AlignCenter)
+
+                    g.setLayout(l)
+
+                    self.job_list.setCellWidget(row, 3, g)
+
+                if "price" in j:
+                    self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem("$NT %s" % j['price']))
+                if "status" in j:
+                    self.job_list.setItem(row, 5, QtWidgets.QTableWidgetItem(j['status']))
+
+                    group = QtWidgets.QWidget()
+                    l = QtWidgets.QHBoxLayout()
+
+                    if j['status'] == 'completed':
+                        dl = QtWidgets.QPushButton()
+                        dl.setIcon(QIcon("./src/gui/images/medium/download.png"))
+                        dl.clicked.connect(lambda state, x=j['id']: self.download_report(x) )
+                        dl.setFixedSize(16, 16)
+                        dl.setToolTip("Download report")
+                        dl.setFlat(True)
+                        l.addWidget(dl, 0, QtCore.Qt.AlignLeft)
+
+                    elif j['status'] == 'pending':
+                        stop = QtWidgets.QPushButton()
+                        stop.setIcon(QIcon("./src/gui/images/medium/stop.png"))
+                        stop.clicked.connect(lambda state, x=j['id']: self.stop_job(x))
+                        stop.setFixedSize(16, 16)
+                        stop.setToolTip("Stop job")
+                        stop.setFlat(True)
+                        l.addWidget(stop, 0, QtCore.Qt.AlignLeft)
+                        pass
+
+                    elif j['status'] == 'stopped':
+
+                        start = QtWidgets.QPushButton()
+                        start.setIcon(QIcon("./src/gui/images/medium/start.png"))
+                        start.setFixedSize(16, 16)
+                        start.setFlat(True)
+                        start.setIconSize(QSize(16, 16))
+                        start.setToolTip("Start job")
+                        start.clicked.connect(lambda state, x=j['id']: self.start_job(x))
+
+                        l.addWidget(start, 0, QtCore.Qt.AlignLeft)
+
+                        h = QtWidgets.QPushButton()
+                        h.setFixedSize(16, 16)
+                        h.setFlat(True)
+                        h.setIconSize(QSize(16, 16))
+                        h.setIcon(QIcon("./src/gui/images/medium/reselecthost.png"))
+                        h.setToolTip("Reselect host")
+
+                        l.addWidget(h, 0, QtCore.Qt.AlignLeft)
+
+                        select_box = QtWidgets.QComboBox()
+                        select_box.setFixedSize(QSize(70, 30))
+                        select_box.setToolTip("Please Select Host")
+                        select_box.activated.connect(lambda state, x=select_box, y=j['id']: self.reassign_host(x, y))
+                        l.addWidget(select_box, 0, QtCore.Qt.AlignLeft)
+                        select_box.hide()
+
+                        h.clicked.connect(lambda state, x=j['software_id'], y=select_box: self.reselect_host(x, y))
+                        pass
+
+                    group.setLayout(l)
+                    self.job_list.setCellWidget(row, 6, group)
 
                 row += 1
-
-        # item = QtWidgets.QTableWidgetItem("test3")
-        # self.job_list.setVerticalHeaderItem(self.job_list.rowCount() - 1, item)
 
     def browse_file(self):
         options = QtWidgets.QFileDialog.Options()
@@ -259,6 +335,22 @@ class RhScreen(QWidget):
         self.job_id = None
 
     def submit_job(self):
+
+        print(self.job)
+        self.app.job_info_timer.stop()
+
+        if "software_id" not in self.job:
+            self.log.info("Please select software", self.console, True)
+            return
+
+        if "run_file" not in self.job:
+            self.log.info("Please select run file", self.console, True)
+            return
+
+        if "host_id" not in self.job or self.job['host_id'] == 0:
+            self.log.info("Please select host", self.console, True)
+            return
+
         if self.job_id:
             self.start_job(self.job_id)
         elif self.current_step == 4:
@@ -266,14 +358,15 @@ class RhScreen(QWidget):
             self.log.info("Creating job", self.console)
 
             r = self.app.api.upload("/job/create", self.job, self.monitor)
-            # self.get_job_list()
+            self.clear_form()
 
             if r:
+                self.clear_form()
                 self.log.debug(r)
                 self.log.info("Job submitted", self.console, True)
                 self.job_id = r['id']
-                self.get_job_info()
                 self.get_job_list()
+                self.app.job_info_timer.start(2000)
 
         pass
 
@@ -285,61 +378,52 @@ class RhScreen(QWidget):
             self.set_step(6)
         pass
 
-    def clear_form(self):
-        # clear software
+    def clear_software(self):
         self.software.clear()
         self.software.addItem("Select Software", 0)
 
-        # clear host
+    def clear_host(self):
         self.host.clear()
         self.host.addItem("Select Hosts", 0)
-        self.job['host_id'] = None
+
+    def clear_form(self):
+
+        self.upload_bar.setValue(0)
+
+        self.job = {}
+
+        # clear host
+        self.clear_host()
 
         # clear files
         self.run_file.clear()
-        self.job['run_file'] = None
 
         # clear other files
         self.other_files.clear()
-        self.job['other_files'] = None
 
         self.get_software_list()
 
-    def start_job(self, job_id=None):
-        if job_id is None and self.job_id:
-            job_id = self.job_id
+    def start_job(self, job_id):
+        print("start job id: %s" % job_id)
+        r = self.app.api.post("/job/%s/start" % job_id)
+        print(r)
+        if r:
+            self.log.info("Job started", self.console)
 
-        job_id = self.get_job_id_from_button(job_id)
-
-        if job_id:
-            print("start job id: %s" % job_id)
-            r = self.app.api.post("/job/%s/start" % job_id)
-            print(r)
-            if r:
-                self.log.info("Job started", self.console)
-
-    def stop_job(self, job_id=None):
-        if not job_id and self.job_id:
-            job_id = self.job_id
-
-        job_id = self.get_job_id_from_button(job_id)
-
-        print(job_id)
-
-        if job_id:
-            print("stop job id: %s" % job_id)
-            r = self.app.api.post("/job/%s/stop" % job_id)
-            print(r)
-            if r:
-                self.log.info("Job stopped", self.console)
+    def stop_job(self, job_id):
+        print("stop job id: %s" % job_id)
+        r = self.app.api.post("/job/%s/stop" % job_id)
+        print(r)
+        if r:
+            self.log.info("Job stopped", self.console)
         pass
 
     def download_report(self, job_id):
 
-        job_id = self.get_job_id_from_button(job_id)
+        # job_id = self.get_selected_job_id(job_id)
 
         # job_id = self.job_list.item(row, 0)
-        # print("Selected Job ID %s" % job_id.text())
+        # print("Selected Job ID %s" % job_id)
         j = self.app.api.get("/job/%s/download_report" % job_id)
 
         if j:
@@ -350,17 +434,21 @@ class RhScreen(QWidget):
             file_name = path + '.zip'
             open(file_name, "wb").write(report)
             self.log.info("Report file has been saved at %s" % file_name, self.console, True)
-            self.clear_form()
             self.set_step(9)
 
-    def get_job_id_from_button(self, job_id):
-        if not job_id:
-            button = self.app.main.focusWidget()
-            # or button = self.sender()
-            index = self.job_list.indexAt(button.pos())
-            if index.isValid():
-                job_id = self.job_list.item(index.row(), 0)
-                if job_id is not None:
-                    job_id = job_id.text()
+    def reselect_host(self, software_id, select_box):
+        self.app.timer.stop()
+        host = self.app.api.get("/software/%s/verified-hosts" % software_id)
+        if host:
+            select_box.clear()
+            for h in host:
+                select_box.addItem("$NT%s: %s" % (h['price'], h['host_info']), h['id'])
+            select_box.showPopup()
+        pass
 
-        return job_id
+    def reassign_host(self, select_box, job_id):
+        new_host_id = select_box.itemData(select_box.currentIndex())
+        self.app.api.put("/job/%s/item" % job_id, {"host_id": new_host_id})
+        self.get_job_list()
+        self.app.start_timer()
+

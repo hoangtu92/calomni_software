@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1959</width>
+    <width>1796</width>
     <height>1019</height>
    </rect>
   </property>
@@ -510,7 +510,7 @@ QTableView {
               <bool>true</bool>
              </property>
              <property name="selectionMode">
-              <enum>QAbstractItemView::SingleSelection</enum>
+              <enum>QAbstractItemView::NoSelection</enum>
              </property>
              <property name="selectionBehavior">
               <enum>QAbstractItemView::SelectItems</enum>
@@ -924,6 +924,12 @@ p, li { white-space: pre-wrap; }
            </item>
            <item>
             <widget class="QTextBrowser" name="job_log">
+             <property name="maximumSize">
+              <size>
+               <width>500</width>
+               <height>16777215</height>
+              </size>
+             </property>
              <property name="styleSheet">
               <string notr="true">QTextBrowser{
 	selection-background-color: rgb(0, 197, 204);

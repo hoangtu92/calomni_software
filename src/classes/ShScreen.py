@@ -1,17 +1,25 @@
+import _thread
 import os, platform
+import shlex
+import shutil
+import subprocess
+import urllib
+import webbrowser
 from os.path import dirname, abspath
 from shutil import make_archive
 from zipfile import ZipFile
 
+from PyQt5.QtGui import QPixmap, QIcon
 from magic import Magic
 from src.api.Api import download
-from PyQt5 import uic, QtCore
-from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QPushButton, QLineEdit, QLabel
+from PyQt5 import uic
+from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QPushButton, QLineEdit, QLabel, \
+    QVBoxLayout
 
-from src.classes.Log import Log
 from src.classes.Software import Software
 import re
 from src.classes.Alert import Alert
+from src.classes.Switcher import Switcher
 
 
 class ShScreen(QWidget):
@@ -19,7 +27,6 @@ class ShScreen(QWidget):
     current_host = None
     items = 0
     cols = 4
-    log = None
 
     def __init__(self, app):
         self.app = app
@@ -70,8 +77,10 @@ class ShScreen(QWidget):
         }
 
         self.status = self.findChild(QLabel, "status")
-        self.online_offline_btn = self.findChild(QPushButton, "online_offline_btn")
+        # self.online_offline_btn = self.findChild(QPushButton, "online_offline_btn")
         self.bottom = self.findChild(QWidget, "bottom")
+        self.btn_wrapper = self.findChild(QVBoxLayout, "btn_wrapper")
+        self.affiliates = self.findChild(QVBoxLayout, "affiliates")
 
         self.filter_buttons["A"].clicked.connect(lambda: self.get_software_list(self.filter_buttons["A"].text()))
         self.filter_buttons["B"].clicked.connect(lambda: self.get_software_list(self.filter_buttons["B"].text()))
@@ -105,18 +114,41 @@ class ShScreen(QWidget):
 
         self.save_check_btn = self.findChild(QPushButton, "save_check_btn")
         self.save_btn = self.findChild(QPushButton, "save_btn")
-        self.online_offline_btn = self.findChild(QPushButton, "online_offline_btn")
+        #self.online_offline_btn = self.findChild(QPushButton, "online_offline_btn")
+
+        self.active_switcher = Switcher()
+        self.btn_wrapper.addWidget(self.active_switcher)
+        self.active_switcher.clicked.connect(self.toggle_online_offline)
+
         self.reset_filter_btn = self.findChild(QPushButton, "reset_filter")
 
         self.save_btn.clicked.connect(self.save)
         self.save_check_btn.clicked.connect(self.save_and_check)
-        self.online_offline_btn.clicked.connect(self.toggle_online_offline)
+        #self.online_offline_btn.clicked.connect(self.toggle_online_offline)
         self.reset_filter_btn.clicked.connect(lambda: self.get_software_list(None, None))
 
         self.cols = round(self.width() / 200)
 
         self.software_list.setColumnStretch(self.cols + 1, 1)
 
+
+    def get_affiliates(self):
+        r = self.app.api.get("/affiliates")
+        if r:
+            for a in r:
+                ads = QPushButton()
+                pxm = QPixmap()
+                pxm.loadFromData(urllib.request.urlopen(a["image"]).read())
+                ads.setIcon(QIcon(pxm))
+                ads.setFlat(True)
+                ads.setIconSize(pxm.rect().size())
+                ads.clicked.connect(lambda: self.go_to_ads(a["url"]))
+                self.affiliates.addWidget(ads)
+                pass
+
+
+    def go_to_ads(self, url):
+        webbrowser.open(url)
 
     def append_software(self, obj):
         # the next free position depends on the number of added items
@@ -174,38 +206,48 @@ class ShScreen(QWidget):
         r = self.app.api.get("/host/item/%s" % self.app.token)
         if not r:
             r = self.registering_host()
+            if r:
+                self.get_host_info()
         else:
             if r['status'] == 'active':
                 self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
                 self.status.setText("Status: Active")
+                self.active_switcher.setChecked(True)
                 self.host_active = True
             else:
                 self.host_active = False
                 self.bottom.setStyleSheet("background:red;")
+                self.active_switcher.setChecked(False)
                 self.status.setText("Status: Inactive")
 
         return r
 
     def registering_host(self):
-        hostnamectl = os.popen("hostnamectl").read()
+
+        '''smbios = subprocess.run(['dmidecode', '-t 2'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+        manufacturer = re.findall(r"Manufacturer:\s(.+)", smbios)
+        product_name = re.findall(r"Product\sName:\s(.+)", smbios)'''
+
+        hostnamectl = subprocess.run("hostnamectl", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
         hostname = re.findall(r"Operating System: (.+)", hostnamectl)
 
-        cpu_name = os.popen("cat /proc/cpuinfo | grep 'model name' | uniq").read()
+        cpu_name = subprocess.run("cat /proc/cpuinfo | grep 'model name' | uniq", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
         cpu_name = re.findall(r"model name\s+:\s+(.+)", cpu_name)
 
-        cpu_core = os.popen("cat /proc/cpuinfo | grep processor | wc -l").read()
+        cpu_core = subprocess.run("cat /proc/cpuinfo | grep processor | wc -l", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
         cpu_core = re.findall(r"\d+", cpu_core)
 
-        cpu_freq = os.popen("cat /proc/cpuinfo | grep 'cpu MHz' | uniq").read()
+        cpu_freq = subprocess.run("cat /proc/cpuinfo | grep 'cpu MHz' | uniq", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
         cpu_freq = re.findall(r"cpu MHz\s+:\s+(.+)", cpu_freq)
 
-        mem_total = os.popen("cat /proc/meminfo | grep MemTotal").read()
+        mem_total = subprocess.run("cat /proc/meminfo | grep MemTotal", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
         mem_total = re.findall(r"MemTotal:\s+(.+) kB", mem_total)
 
-        mem_free = os.popen("cat /proc/meminfo | grep MemFree").read()
+        mem_free = subprocess.run("cat /proc/meminfo | grep MemFree", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
         mem_free = re.findall(r"MemFree:\s+(.+) kB", mem_free)
 
-        storage = os.popen("df -T /opt/ | grep dev").read()
+        storage = subprocess.run("df -T /opt/ | grep dev", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
+        print(storage)
         storage = re.findall(r"([\w\/]+)\s+([\w]+)\s+([\d]+)\s+([\d]+)\s+([\d]+)\s+([\w\,\.%]+)", storage)
 
         storage_total = int(storage[0][2])
@@ -213,7 +255,7 @@ class ShScreen(QWidget):
 
         host_info = {
             "token": self.app.token,
-            "name": "%s" % (platform.platform()),
+            "name": "%s" % platform.platform(),
             "os": hostname[0],
             "cpu_freq": cpu_freq[0],
             "info": platform.platform(),
@@ -229,13 +271,13 @@ class ShScreen(QWidget):
         r = self.app.api.post("/host/create", host_info)
 
         return r
-        pass
 
     def initializing(self):
-        self.log = Log(self.app)
+        self.app.timer.timeout.connect(self.fetch_jobs)
         self.get_host_info()
         self.get_software_list()
-        self.fetch_jobs()
+        self.app.timer.start(5000)
+        self.get_affiliates()
         pass
 
     def save(self, idx=None):
@@ -275,11 +317,13 @@ class ShScreen(QWidget):
     def toggle_online_offline(self):
         if self.host_active:
             status = 'inactive'
+            self.active_switcher.setChecked(False)
             self.bottom.setStyleSheet("background:red;")
             self.status.setText("Status: Inactive")
             self.host_active = False
         else:
             status = 'active'
+            self.active_switcher.setChecked(True)
             self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
             self.status.setText("Status: Active")
             self.host_active = True
@@ -297,10 +341,9 @@ class ShScreen(QWidget):
             fields['data'] = (os.path.basename(file_name), open(file_name, 'rb'), self.mime.from_file(file_name))
 
         r = self.app.api.upload("/job/%s/update_task" % job_id, fields)
-        self.log.debug(r)
+        self.app.log.debug(r)
 
     def fetch_jobs(self):
-        QtCore.QTimer.singleShot(5000, self.fetch_jobs)
 
         if not self.host_active:
             return
@@ -308,34 +351,49 @@ class ShScreen(QWidget):
         job = self.app.api.get("/job/assignments", {"token": self.app.token})
         if job:
             for j in job:
-                # print(j)
-                # Save all files to environment folder
-                f = re.findall(r"(\w+).zip$", j['file_url'])
+                _thread.start_new_thread(self.run_job, (j,))
+                '''try:
+                    _thread.start_new_thread(self.run_job, j)
+                except:
+                    self.app.log.debug("Error starting job")'''
 
-                path = self.app.home_dir + "/environment/" + f[0]
-                file_name = path + '.zip'
-
-                # Begin the task
-                self.update_task(j['job_id'], "running")
-
-                # Save file
-                self.log.info("Save job file to: " + file_name)
-                job_file = download(j['file_url'])
-                open(file_name, "wb").write(job_file)
-
-                # Extract file
-                with ZipFile(file_name, 'r') as zip_ref:
-                    zip_ref.extractall(path)
-                    os.popen("chmod +x " + path + "/" + j['run_file']).read()
-                    os.remove(file_name)
-
-                    command = "cd %s; %s" % (path, j['command'])
-                    result = os.popen(command).read()
-                    self.log.debug(result)
-
-                    make_archive(path, 'zip', path)
-
-                    self.update_task(j['job_id'], 'completed', file_name)
 
         pass
+
+    def run_job(self, j):
+        # Save all files to environment folder
+
+        path = self.app.home_dir + "/environment/" + j["job_uid"]
+        file_name = path + '.zip'
+
+        # Begin the task
+        self.update_task(j['job_id'], "running")
+
+        # Save file
+        self.app.log.info("Save job file to: " + file_name)
+        job_file = download(j['file_url'])
+        open(file_name, "wb").write(job_file)
+
+        # Extract file
+        with ZipFile(file_name, 'r') as zip_ref:
+            zip_ref.extractall(path)
+            os.popen("chmod +x " + path + "/" + j['run_file']).read()
+            os.remove(file_name)
+
+            command = "cd %s; %s" % (path, j['command'])
+            result = os.popen(command).read()
+            self.app.log.debug(result)
+
+            try:
+                make_archive(path, 'zip', path)
+                self.update_task(j['job_id'], 'completed', file_name)
+
+                # Clean working directory
+                os.remove(file_name)
+                shutil.rmtree(path)
+            except:
+                self.update_task(j['job_id'], "failed")
+                pass
+
+
 

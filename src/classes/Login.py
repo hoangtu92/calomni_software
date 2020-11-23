@@ -38,16 +38,9 @@ class Login(QWidget):
         email = self.email.text()
         password = self.password.text()
 
-        if email == "":
-            email = 'sh@gmail.com'
-            password = '123456'
-
         self.app.api.login(email, password)
 
         if self.app.api.bearer is not None:
-
-            self.app.log.debug(self.app.api.user)
-
             self.hide()
 
             if self.app.api.user['role'] == 'rh':
@@ -56,9 +49,6 @@ class Login(QWidget):
             elif self.app.api.user['role'] == 'sh':
                 self.app.sh_screen.show()
                 self.app.sh_screen.initializing()
-
-        else:
-            self.app.log.error("Login incorrect", None, True)
 
     def register(self):
         webbrowser.open("https://calomni.com")

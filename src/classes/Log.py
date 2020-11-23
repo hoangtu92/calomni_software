@@ -20,25 +20,26 @@ class Log:
         self.log.setLevel(logging.DEBUG)
         self.log.addHandler(handler)
 
-    def debug(self, msg, console=None, alert=None):
+    def debug(self, msg, console=None, alert=None, callback=None):
         self.log.debug(msg)
-        self.app_log(msg, console, alert)
+        self.app_log(msg, console, alert, callback)
 
-    def warning(self, msg, console=None, alert=None):
+    def warning(self, msg, console=None, alert=None, callback=None):
         self.log.warning(msg)
-        self.app_log(msg, console, alert)
+        self.app_log(msg, console, alert, callback)
 
-    def info(self, msg, console=None, alert=None):
+    def info(self, msg, console=None, alert=None, callback=None):
         self.log.info(msg)
-        self.app_log(msg, console, alert)
+        self.app_log(msg, console, alert, callback)
 
-    def error(self, msg, console=None, alert=None):
+    def error(self, msg, console=None, alert=None, callback=None):
         self.log.error(msg)
-        self.app_log(msg, console, alert)
+        self.app_log(msg, console, alert, callback)
 
-    def app_log(self, msg, console, alert):
+    def app_log(self, msg, console, alert, callback=None):
+        print(msg)
         if alert is not None:
-            Alert(msg)
+            Alert(msg, "Alert", callback)
         if console is not None:
             today = datetime.now()
             date = today.strftime("%Y/%m/%d %H:%M:%S")
