@@ -1,10 +1,8 @@
 from os.path import dirname, abspath
 
 from PyQt5 import uic
-from PyQt5.QtWidgets import QWidget, QLineEdit, QPushButton, QDesktopWidget, QLabel
+from PyQt5.QtWidgets import QWidget, QLineEdit, QPushButton, QDesktopWidget
 import webbrowser
-
-from src.classes.Alert import Alert
 
 
 class Login(QWidget):

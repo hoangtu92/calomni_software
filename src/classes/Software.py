@@ -11,6 +11,9 @@ class Software(QWidget):
     def __init__(self, sh, obj):
         QWidget.__init__(self)
 
+        self.setAutoFillBackground(True)
+        self.setStyleSheet("background-color: white;")
+
         self.obj = obj
         self.sh = sh
 
@@ -50,7 +53,7 @@ class Software(QWidget):
         grid.addWidget(self.note, 2, 0, 1, 10)
         grid.addWidget(self.fee, 3, 0, 1, 10)
 
-        self.setStyleSheet("background: white")
+
 
         self.setLayout(grid)
 
@@ -60,16 +63,11 @@ class Software(QWidget):
 
         r = self.sh.app.api.post("/software/%s/test" % self.obj['id'], {"token": self.sh.app.token})
         if r:
-            print(r)
             try:
                 result = os.popen(r['test_command']).read()
-                print(result)
                 if result:
-
                     submit_result = self.sh.app.api.put("/software/%s/test" % self.obj['id'],
                                                         {"token": self.sh.app.token, "result": result})
-
-                    print(submit_result)
 
                     if submit_result['status']:
                         self.status.setText("Verified")
@@ -83,5 +81,6 @@ class Software(QWidget):
         pass
 
     def save(self):
-        r = self.sh.app.api.post("/software/%s/item" % self.obj['id'], {"price": self.fee.text(), "note": self.note.text(), "token": self.sh.app.token})
-        print(r)
+        if self.fee.text():
+            return self.sh.app.api.post("/software/%s/item" % self.obj['id'], {"price": self.fee.text(), "note": self.note.text(), "token": self.sh.app.token})
+        return False

@@ -1,25 +1,87 @@
-import _thread
-import os, platform
-import shlex
-import shutil
+import hashlib
+import logging
+import os, platform, re, shutil
 import subprocess
 import urllib
 import webbrowser
+from multiprocessing import Pool, cpu_count
 from os.path import dirname, abspath
 from shutil import make_archive
 from zipfile import ZipFile
 
 from PyQt5.QtGui import QPixmap, QIcon
 from magic import Magic
-from src.api.Api import download
+
+from src.api.Api import download, Api, mime
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QPushButton, QLineEdit, QLabel, \
     QVBoxLayout
 
 from src.classes.Software import Software
-import re
 from src.classes.Alert import Alert
+from src.classes.Config import Config
 from src.classes.Switcher import Switcher
+
+
+def update_task(job_id, status, file_name=None):
+    fields = {
+        'status': status
+    }
+    if file_name is not None:
+        fields['data'] = (os.path.basename(file_name), open(file_name, 'rb'), mime.from_file(file_name))
+    try:
+        Api.silence_upload("/job/%s/update_task" % job_id, fields)
+    except:
+        pass
+    # self.app.log.debug(r)
+
+
+def run_job(j):
+    # Save all files to environment folder
+
+    path = Config.home_dir + "/environment/" + j['path']
+    file_name = path + '.zip'
+
+    # Begin the task
+    update_task(j['job_id'], "running")
+
+    # Save file
+    # self.app.log.info("Save job file to: " + file_name)
+    job_file = download(j['file_url'])
+    open(file_name, "wb").write(job_file)
+
+
+
+    # Extract file
+    with ZipFile(file_name, 'r') as zip_ref:
+        zip_ref.extractall(path)
+        os.popen("chmod +x " + path + "/" + j['run_file']).read()
+        os.remove(file_name)
+
+        handler = logging.FileHandler("%s/run.log" % path)
+        handler.setFormatter(logging.Formatter('%(asctime)s: %(levelname)s. %(message)s', '%m/%d/%Y %I:%M:%S %p'))
+
+        log = logging.getLogger(file_name)
+        log.setLevel(logging.INFO)
+        log.addHandler(handler)
+
+        command = "cd %s; %s" % (path, j['command'])
+
+        try:
+            result = os.popen(command).read()
+            log.info(result)
+
+            make_archive(path, 'zip', path)
+            update_task(j['job_id'], 'completed', file_name)
+
+            # Clean working directory
+            os.remove(file_name)
+            shutil.rmtree(path)
+        except:
+            update_task(j['job_id'], "failed")
+            shutil.rmtree(path)
+
+
 
 
 class ShScreen(QWidget):
@@ -37,8 +99,6 @@ class ShScreen(QWidget):
         qr = self.frameGeometry()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
-
-        self.mime = Magic(mime=True)
 
         self.host_active = True
 
@@ -114,7 +174,7 @@ class ShScreen(QWidget):
 
         self.save_check_btn = self.findChild(QPushButton, "save_check_btn")
         self.save_btn = self.findChild(QPushButton, "save_btn")
-        #self.online_offline_btn = self.findChild(QPushButton, "online_offline_btn")
+        # self.online_offline_btn = self.findChild(QPushButton, "online_offline_btn")
 
         self.active_switcher = Switcher()
         self.btn_wrapper.addWidget(self.active_switcher)
@@ -124,13 +184,12 @@ class ShScreen(QWidget):
 
         self.save_btn.clicked.connect(self.save)
         self.save_check_btn.clicked.connect(self.save_and_check)
-        #self.online_offline_btn.clicked.connect(self.toggle_online_offline)
+        # self.online_offline_btn.clicked.connect(self.toggle_online_offline)
         self.reset_filter_btn.clicked.connect(lambda: self.get_software_list(None, None))
 
         self.cols = round(self.width() / 200)
 
         self.software_list.setColumnStretch(self.cols + 1, 1)
-
 
     def get_affiliates(self):
         r = self.app.api.get("/affiliates")
@@ -145,7 +204,6 @@ class ShScreen(QWidget):
                 ads.clicked.connect(lambda: self.go_to_ads(a["url"]))
                 self.affiliates.addWidget(ads)
                 pass
-
 
     def go_to_ads(self, url):
         webbrowser.open(url)
@@ -231,19 +289,24 @@ class ShScreen(QWidget):
         hostnamectl = subprocess.run("hostnamectl", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
         hostname = re.findall(r"Operating System: (.+)", hostnamectl)
 
-        cpu_name = subprocess.run("cat /proc/cpuinfo | grep 'model name' | uniq", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
+        cpu_name = subprocess.run("cat /proc/cpuinfo | grep 'model name' | uniq", stdout=subprocess.PIPE,
+                                  shell=True).stdout.decode('utf-8')
         cpu_name = re.findall(r"model name\s+:\s+(.+)", cpu_name)
 
-        cpu_core = subprocess.run("cat /proc/cpuinfo | grep processor | wc -l", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
+        cpu_core = subprocess.run("cat /proc/cpuinfo | grep processor | wc -l", stdout=subprocess.PIPE,
+                                  shell=True).stdout.decode('utf-8')
         cpu_core = re.findall(r"\d+", cpu_core)
 
-        cpu_freq = subprocess.run("cat /proc/cpuinfo | grep 'cpu MHz' | uniq", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
+        cpu_freq = subprocess.run("cat /proc/cpuinfo | grep 'cpu MHz' | uniq", stdout=subprocess.PIPE,
+                                  shell=True).stdout.decode('utf-8')
         cpu_freq = re.findall(r"cpu MHz\s+:\s+(.+)", cpu_freq)
 
-        mem_total = subprocess.run("cat /proc/meminfo | grep MemTotal", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
+        mem_total = subprocess.run("cat /proc/meminfo | grep MemTotal", stdout=subprocess.PIPE,
+                                   shell=True).stdout.decode('utf-8')
         mem_total = re.findall(r"MemTotal:\s+(.+) kB", mem_total)
 
-        mem_free = subprocess.run("cat /proc/meminfo | grep MemFree", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
+        mem_free = subprocess.run("cat /proc/meminfo | grep MemFree", stdout=subprocess.PIPE, shell=True).stdout.decode(
+            'utf-8')
         mem_free = re.findall(r"MemFree:\s+(.+) kB", mem_free)
 
         storage = subprocess.run("df -T /opt/ | grep dev", stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
@@ -285,7 +348,7 @@ class ShScreen(QWidget):
             idx = 0
 
         if idx == self.software_list.count() - 1:
-            Alert("Successfully saved!")
+            # Alert("Successfully saved!")
             return
 
         software = self.software_list.itemAt(idx).widget()
@@ -328,20 +391,9 @@ class ShScreen(QWidget):
             self.status.setText("Status: Active")
             self.host_active = True
 
-        self.app.api.post("/host/item/%s" % self.app.token, {"status" : status})
+        self.app.api.post("/host/item/%s" % self.app.token, {"status": status})
 
         pass
-
-    def update_task(self, job_id, status, file_name = None):
-
-        fields = {
-            'status': status
-        }
-        if file_name is not None:
-            fields['data'] = (os.path.basename(file_name), open(file_name, 'rb'), self.mime.from_file(file_name))
-
-        r = self.app.api.upload("/job/%s/update_task" % job_id, fields)
-        self.app.log.debug(r)
 
     def fetch_jobs(self):
 
@@ -350,50 +402,10 @@ class ShScreen(QWidget):
 
         job = self.app.api.get("/job/assignments", {"token": self.app.token})
         if job:
-            for j in job:
-                _thread.start_new_thread(self.run_job, (j,))
-                '''try:
-                    _thread.start_new_thread(self.run_job, j)
-                except:
-                    self.app.log.debug("Error starting job")'''
-
+            pool = Pool(cpu_count())
+            pool.imap(run_job, job)
 
         pass
 
-    def run_job(self, j):
-        # Save all files to environment folder
-
-        path = self.app.home_dir + "/environment/" + j["job_uid"]
-        file_name = path + '.zip'
-
-        # Begin the task
-        self.update_task(j['job_id'], "running")
-
-        # Save file
-        self.app.log.info("Save job file to: " + file_name)
-        job_file = download(j['file_url'])
-        open(file_name, "wb").write(job_file)
-
-        # Extract file
-        with ZipFile(file_name, 'r') as zip_ref:
-            zip_ref.extractall(path)
-            os.popen("chmod +x " + path + "/" + j['run_file']).read()
-            os.remove(file_name)
-
-            command = "cd %s; %s" % (path, j['command'])
-            result = os.popen(command).read()
-            self.app.log.debug(result)
-
-            try:
-                make_archive(path, 'zip', path)
-                self.update_task(j['job_id'], 'completed', file_name)
-
-                # Clean working directory
-                os.remove(file_name)
-                shutil.rmtree(path)
-            except:
-                self.update_task(j['job_id'], "failed")
-                pass
-
-
-
+    def logout(self):
+        self.app.logout()

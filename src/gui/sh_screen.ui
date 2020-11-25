@@ -57,7 +57,7 @@
                <string/>
               </property>
               <property name="pixmap">
-               <pixmap>../../../../.designer/backup/images/medium/logo-blue.png</pixmap>
+               <pixmap>images/medium/logo-blue.png</pixmap>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
@@ -405,6 +405,26 @@ padding: 10px 20px;</string>
                 </property>
                </spacer>
               </item>
+              <item>
+               <widget class="QPushButton" name="pushButton">
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="icon">
+                 <iconset>
+                  <normaloff>images/medium/logout.png</normaloff>images/medium/logout.png</iconset>
+                </property>
+                <property name="iconSize">
+                 <size>
+                  <width>32</width>
+                  <height>32</height>
+                 </size>
+                </property>
+                <property name="flat">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
              </layout>
             </item>
             <item>
@@ -464,5 +484,25 @@ padding: 10px 20px;</string>
   </layout>
  </widget>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>Form</receiver>
+   <slot>logout()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>945</x>
+     <y>44</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>985</x>
+     <y>54</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>logout()</slot>
+ </slots>
 </ui>

@@ -1,9 +1,14 @@
 import os
 import re
+import queue
+import shutil
+import threading
+import time
 from os.path import dirname, abspath
+from zipfile import ZipFile
 
-from PyQt5.QtCore import QSize
-
+import pycurl
+from PyQt5.QtCore import QSize, QThread, QTimer
 from src.api.Api import download
 from PyQt5 import uic, QtCore
 from PyQt5.QtGui import QPixmap, QIcon
@@ -12,6 +17,7 @@ from PyQt5.QtWidgets import QWidget, QDesktopWidget, QComboBox, QLabel, QLineEdi
 from PyQt5 import QtWidgets
 import magic
 
+from src.classes.Helper import Helper
 from src.classes.Log import Log
 
 
@@ -21,6 +27,11 @@ class RhScreen(QWidget):
     other_files = []
     job_id = None
     log = None
+    upload_bar = None
+    is_cancel_upload = False
+    current_job = None
+    callback_queue = queue.Queue()
+    timer = QTimer()
 
     def __init__(self, app):
         self.app = app
@@ -63,11 +74,6 @@ class RhScreen(QWidget):
         self.software.currentIndexChanged.connect(self.software_selected)
         self.host.currentIndexChanged.connect(self.host_selected)
 
-
-        # self.job_list.cellClicked.connect(self.download_report)
-
-
-
         self.job = {}
 
     def set_step(self, step):
@@ -104,7 +110,6 @@ class RhScreen(QWidget):
                         self.set_step(5)
 
     def initializing(self):
-        self.app.job_info_timer.timeout.connect(self.get_job_info)
         self.app.timer.timeout.connect(self.get_job_list)
         self.get_job_list()
         self.log = Log(self.app)
@@ -177,7 +182,7 @@ class RhScreen(QWidget):
             self.job_summary.clear()
             self.get_job_logs()
             if j and 'status' in j:
-                self.app.job_info_timer.stop()
+                #self.app.job_info_timer.stop()
                 if j['status'] == 'completed':
                     self.set_step(8)
                     self.job_summary.append("Job finished!!")
@@ -191,18 +196,15 @@ class RhScreen(QWidget):
     def get_job_list(self):
         jobs = self.app.api.get("/job/list")
         row = 0
-
         if jobs:
             self.job_list.setRowCount(0)
             for j in jobs:
                 self.job_list.insertRow(self.job_list.rowCount())
 
-                if "id" in j:
-                    self.job_list.setItem(row, 0, QtWidgets.QTableWidgetItem("%s" % j['id']))
                 if "created_at" in j:
-                    self.job_list.setItem(row, 1, QtWidgets.QTableWidgetItem(j['created_at']))
+                    self.job_list.setItem(row, 0, QtWidgets.QTableWidgetItem(j['created_at']))
                 if "software_name" in j:
-                    self.job_list.setItem(row, 2, QtWidgets.QTableWidgetItem(j['software_name']))
+                    self.job_list.setItem(row, 1, QtWidgets.QTableWidgetItem(j['software_name']))
                 if "host_info" in j:
 
                     g = QtWidgets.QWidget()
@@ -211,14 +213,14 @@ class RhScreen(QWidget):
                     s = QtWidgets.QLabel()
 
                     g.setToolTip(j["host_info"])
-                    g.setToolTipDuration(60000)
+                    g.setToolTipDuration(600000)
 
                     if j['host_activity_status'] == 'active':
                         pxm = QPixmap("./src/gui/images/medium/online.png")
-                        s.setPixmap(pxm.scaled(8,8, QtCore.Qt.KeepAspectRatio))
+                        s.setPixmap(pxm.scaled(8, 8, QtCore.Qt.KeepAspectRatio))
                     else:
                         pxm = QPixmap("./src/gui/images/medium/offline.png")
-                        s.setPixmap(pxm.scaled(8,8, QtCore.Qt.KeepAspectRatio))
+                        s.setPixmap(pxm.scaled(8, 8, QtCore.Qt.KeepAspectRatio))
 
                     n = QtWidgets.QLabel()
                     n.setText(j["host_name"])
@@ -228,12 +230,12 @@ class RhScreen(QWidget):
 
                     g.setLayout(l)
 
-                    self.job_list.setCellWidget(row, 3, g)
+                    self.job_list.setCellWidget(row, 2, g)
 
                 if "price" in j:
-                    self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem("$NT %s" % j['price']))
+                    self.job_list.setItem(row, 3, QtWidgets.QTableWidgetItem("$NT %s" % j['price']))
                 if "status" in j:
-                    self.job_list.setItem(row, 5, QtWidgets.QTableWidgetItem(j['status']))
+                    self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem(j['status']))
 
                     group = QtWidgets.QWidget()
                     l = QtWidgets.QHBoxLayout()
@@ -241,13 +243,13 @@ class RhScreen(QWidget):
                     if j['status'] == 'completed':
                         dl = QtWidgets.QPushButton()
                         dl.setIcon(QIcon("./src/gui/images/medium/download.png"))
-                        dl.clicked.connect(lambda state, x=j['id']: self.download_report(x) )
+                        dl.clicked.connect(lambda state, x=j['id']: self.download_report(x))
                         dl.setFixedSize(16, 16)
                         dl.setToolTip("Download report")
                         dl.setFlat(True)
                         l.addWidget(dl, 0, QtCore.Qt.AlignLeft)
 
-                    elif j['status'] == 'pending':
+                    elif j['status'] == 'pending' or j['status'] == 'running':
                         stop = QtWidgets.QPushButton()
                         stop.setIcon(QIcon("./src/gui/images/medium/stop.png"))
                         stop.clicked.connect(lambda state, x=j['id']: self.stop_job(x))
@@ -257,7 +259,7 @@ class RhScreen(QWidget):
                         l.addWidget(stop, 0, QtCore.Qt.AlignLeft)
                         pass
 
-                    elif j['status'] == 'stopped':
+                    elif j['status'] == 'stopped' or j['status'] == 'failed':
 
                         start = QtWidgets.QPushButton()
                         start.setIcon(QIcon("./src/gui/images/medium/start.png"))
@@ -289,7 +291,7 @@ class RhScreen(QWidget):
                         pass
 
                     group.setLayout(l)
-                    self.job_list.setCellWidget(row, 6, group)
+                    self.job_list.setCellWidget(row, 5, group)
 
                 row += 1
 
@@ -308,12 +310,14 @@ class RhScreen(QWidget):
 
             self.log.info("Run file selected %s" % fileName, self.console)
             content_type = self.mime.from_file(fileName)
-            self.job['run_file'] = (os.path.basename(fileName), open(fileName, 'rb'), content_type)
+            # self.job['run_file'] = (pycurl.FORM_BUFFER, os.path.basename(fileName), pycurl.FORM_BUFFERPTR, open(fileName, 'rb'), pycurl.FORM_CONTENTTYPE, content_type)
+            self.job['run_file'] = fileName
             self.refresh()
             self.set_step(3)
             self.job_id = None
 
     def browse_files(self):
+        self.job['other_files'] = []
         options = QtWidgets.QFileDialog.Options()
         options |= QtWidgets.QFileDialog.DontUseNativeDialog
         file_names, _ = QtWidgets.QFileDialog.getOpenFileNames(
@@ -329,46 +333,108 @@ class RhScreen(QWidget):
             for file in file_names:
                 self.log.info("Other files selected: %s" % file, self.console)
                 content_type = self.mime.from_file(file)
-                self.job['other_files[%d]' % k] = (os.path.basename(file), open(file, 'rb'), content_type)
+                # self.job['other_files[%d]' % k] = (pycurl.FORM_BUFFER, os.path.basename(file), pycurl.FORM_BUFFERPTR, open(file, 'rb'), pycurl.FORM_CONTENTTYPE, content_type)
+                # self.job['other_files[%d]' % k] = file
+                self.job['other_files'].append(file)
                 k += 1
 
         self.job_id = None
 
     def submit_job(self):
 
-        print(self.job)
-        self.app.job_info_timer.stop()
+        # self.app.job_info_timer.stop()
 
         if "software_id" not in self.job:
             self.log.info("Please select software", self.console, True)
             return
 
-        if "run_file" not in self.job:
+        '''if "run_file" not in self.job:
             self.log.info("Please select run file", self.console, True)
-            return
+            return'''
 
         if "host_id" not in self.job or self.job['host_id'] == 0:
             self.log.info("Please select host", self.console, True)
             return
 
-        if self.job_id:
-            self.start_job(self.job_id)
-        elif self.current_step == 4:
+        self.is_cancel_upload = False
+
+        if self.current_step == 4:
             self.set_step(5)
             self.log.info("Creating job", self.console)
 
-            r = self.app.api.upload("/job/create", self.job, self.monitor)
-            self.clear_form()
+            self.current_job = self.app.api.upload("/job/create", {
+                "host_id": self.job['host_id'],
+                "software_id": self.job['software_id'],
+                "run_file": os.path.basename(self.job['run_file'])
+            })
 
-            if r:
-                self.clear_form()
-                self.log.debug(r)
-                self.log.info("Job submitted", self.console, True)
-                self.job_id = r['id']
-                self.get_job_list()
-                self.app.job_info_timer.start(2000)
+            if self.current_job:
+
+                self.log.info("Uploading file", self.console)
+
+                file = ZipFile(self.app.home_dir + "/.tmp/%s.zip" % self.current_job['uid'], "w")
+                file.write(self.job['run_file'], os.path.basename(self.job['run_file']))
+
+                for other_file in self.job['other_files']:
+                    file.write(other_file, os.path.basename(other_file))
+
+                file.close()
+
+                threading.Thread(target=self.app.api.curl_upload, args=(
+                    "/job/%s/upload_file" % self.current_job['id'], file, self.progress, self.read_function)).start()
+
+                self.timer.timeout.connect(self.run_queue)
+                self.timer.start(50)
 
         pass
+
+    def run_queue(self):
+
+        if not self.callback_queue.empty():
+            try:
+                callback = self.callback_queue.get(False)
+                callback()
+            except queue.Empty:
+                pass
+
+    def read_function(self, file, size):
+        while not self.is_cancel_upload:
+            return file.read(size)
+
+        return pycurl.READFUNC_ABORT
+
+    def cancel_upload(self):
+        if not self.is_cancel_upload:
+            self.is_cancel_upload = True
+            self.log.info("Upload canceled", self.console)
+            self.app.api.delete("/job/%s/item" % self.current_job['id'])
+            self.clear_form()
+
+    '''Pycurl Monitor'''
+
+    def job_submitted(self, percent):
+
+        rate = round(percent, ndigits=2)  # Convert the completed fraction to percentage
+        completed = int(rate)
+        self.upload_bar.setValue(completed)
+
+        if percent == 100:
+            # self.get_job_list()
+            self.log.info("File successfully transferred", self.console)
+            self.log.info("Job submitted", self.console, True)
+            self.clear_form()
+            self.set_step(6)
+            self.callback_queue.task_done()
+            self.timer.stop()
+
+    def progress(self, total_to_download, total_downloaded, total_to_upload, total_uploaded):
+        if total_to_upload:
+            percent_completed = float(total_uploaded) / total_to_upload  # You are calculating amount uploaded
+            percent = percent_completed * 100
+            # How the f.. can i send signal to main thread now?
+            self.callback_queue.put(lambda: self.job_submitted(percent))
+
+    '''MultipartEncoderMonitor'''
 
     def monitor(self, monitor):
         percent = round((monitor.bytes_read / monitor.len) * 100)
@@ -376,6 +442,8 @@ class RhScreen(QWidget):
         if percent == 100:
             self.log.info("File successfully transferred", self.console)
             self.set_step(6)
+            # self.app.job_info_timer.start(2000)
+
         pass
 
     def clear_software(self):
@@ -387,6 +455,11 @@ class RhScreen(QWidget):
         self.host.addItem("Select Hosts", 0)
 
     def clear_form(self):
+
+        Helper.clear_folder(self.app.home_dir + "/.tmp/")
+
+        with self.callback_queue.mutex:
+            self.callback_queue.queue.clear()
 
         self.upload_bar.setValue(0)
 
@@ -406,14 +479,12 @@ class RhScreen(QWidget):
     def start_job(self, job_id):
         print("start job id: %s" % job_id)
         r = self.app.api.post("/job/%s/start" % job_id)
-        print(r)
         if r:
             self.log.info("Job started", self.console)
 
     def stop_job(self, job_id):
         print("stop job id: %s" % job_id)
         r = self.app.api.post("/job/%s/stop" % job_id)
-        print(r)
         if r:
             self.log.info("Job stopped", self.console)
         pass
@@ -450,5 +521,7 @@ class RhScreen(QWidget):
         new_host_id = select_box.itemData(select_box.currentIndex())
         self.app.api.put("/job/%s/item" % job_id, {"host_id": new_host_id})
         self.get_job_list()
-        self.app.start_timer()
+        self.app.timer.start()
 
+    def logout(self):
+        self.app.logout()
