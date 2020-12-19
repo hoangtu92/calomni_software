@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import os, platform, re, shutil
 import subprocess
@@ -10,7 +9,6 @@ from shutil import make_archive
 from zipfile import ZipFile
 
 from PyQt5.QtGui import QPixmap, QIcon
-from magic import Magic
 
 from src.api.Api import download, Api, mime
 from PyQt5 import uic

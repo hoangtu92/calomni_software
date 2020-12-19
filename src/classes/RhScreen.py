@@ -110,8 +110,8 @@ class RhScreen(QWidget):
                         self.set_step(5)
 
     def initializing(self):
-        self.app.timer.timeout.connect(self.get_job_list)
         self.get_job_list()
+        self.app.timer.timeout.connect(self.get_job_list)
         self.log = Log(self.app)
         self.log.info("Starting application", self.console)
         self.log.info("Retrieving job list", self.console)
@@ -426,6 +426,7 @@ class RhScreen(QWidget):
             self.set_step(6)
             self.callback_queue.task_done()
             self.timer.stop()
+            self.get_job_list()
 
     def progress(self, total_to_download, total_downloaded, total_to_upload, total_uploaded):
         if total_to_upload:

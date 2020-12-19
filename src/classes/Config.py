@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 
@@ -8,6 +9,10 @@ class Config:
 
     @staticmethod
     def load_token():
+        if not os.path.exists(Config.home_dir + "/.config/token.txt"):
+            p = open(Config.home_dir + "/.config/token.txt", "w")
+            p.close()
+
         p = open(Config.home_dir + "/.config/token.txt", "r")
         token = p.readline()
         p.close()
