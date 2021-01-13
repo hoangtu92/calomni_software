@@ -47,8 +47,6 @@ class App(QWidget):
         if not os.path.isdir(self.home_dir + "/logs/"):
             os.mkdir(self.home_dir + "/logs/")
 
-        if not os.path.isdir(self.home_dir + "/.config/"):
-            os.mkdir(self.home_dir + "/.config/")
 
         self.api = Api(self)
         self.log = Log(self)

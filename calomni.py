@@ -1,12 +1,13 @@
 import atexit
 
 from PyQt5.QtWidgets import QApplication
-from src.classes.App import App
-from tendo import singleton
+from tendo.singleton import SingleInstance
 
-me = singleton.SingleInstance()
+from src.classes.App import App
+me = SingleInstance()
 
 if __name__ == '__main__':
+    x = me.initialized
 
     app = QApplication([])
     a = App(app)

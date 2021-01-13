@@ -1,12 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import copy_metadata
 
 block_cipher = None
+
+data = [('/home/calomni/PycharmProjects/calomni/src/gui', 'src/gui')]
+data.extend(copy_metadata("tendo"))  # <-- the fix
 
 
 a = Analysis(['calomni.py'],
              pathex=['/home/calomni/PycharmProjects/calomni'],
              binaries=[],
-             datas=[('/home/calomni/PycharmProjects/calomni/src/gui', 'src/gui')],
+             datas=data,
              hiddenimports=[],
              hookspath=[],
              runtime_hooks=[],

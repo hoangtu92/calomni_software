@@ -195,6 +195,7 @@ class RhScreen(QWidget):
 
     def get_job_list(self):
         jobs = self.app.api.get("/job/list")
+        print("Getting job list\n")
         row = 0
         if jobs:
             self.job_list.setRowCount(0)
