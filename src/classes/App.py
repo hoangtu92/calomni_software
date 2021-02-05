@@ -35,6 +35,9 @@ class App(QWidget):
         if not os.path.isdir(self.home_dir):
             os.mkdir(self.home_dir)
 
+        if not os.path.isdir(self.home_dir + "/.config/"):
+            os.mkdir(self.home_dir + "/.config/")
+
         if not os.path.isdir(self.home_dir + "/environment/"):
             os.mkdir(self.home_dir + "/environment/")
 

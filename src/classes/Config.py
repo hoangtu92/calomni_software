@@ -11,6 +11,9 @@ class Config:
     @staticmethod
     def load_token():
 
+        if not os.path.isdir(Config.home_dir):
+            os.mkdir(Config.home_dir)
+
         if not os.path.isdir(Config.home_dir + "/.config/"):
             os.mkdir(Config.home_dir + "/.config/")
 

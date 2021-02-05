@@ -38,7 +38,7 @@ class Login(QWidget):
 
         self.app.api.login(email, password)
 
-        if self.app.api.bearer is not None:
+        if self.app.api.bearer is not None and self.app.api.bearer != "":
             self.hide()
 
             if self.app.api.user['role'] == 'rh':

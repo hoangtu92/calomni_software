@@ -22,7 +22,7 @@ class FileReader:
         return self.callback(self.file, size)
 
 class Api:
-    apiUrl = "http://calomni.com/api"
+    apiUrl = "https://calomni.com/api"
     bearer = Config.load_token()
     user = {}
 
