@@ -226,6 +226,20 @@ class Api:
             return False
         pass
 
+    @staticmethod
+    def static_get(endpoint, params=None):
+        if Api.bearer is None:
+            return False
+
+        try:
+            resp = requests.get(Api.apiUrl + endpoint, params=params,
+                                headers={"Accept": "application/json", "Authorization": "Bearer " + Api.bearer})
+
+            return resp.json()
+
+        except:
+            return False
+
 
     '''delete request'''
 

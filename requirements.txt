@@ -3,3 +3,7 @@ PyQt5~=5.15.1
 getmac~=0.8.2
 python-magic~=0.4.18
 setuptools~=50.3.0
+pycurl~=7.43.0.6
+pyinstaller~=4.1
+pusher~=3.0.0
+Pysher~=1.0.6

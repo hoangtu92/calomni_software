@@ -17,8 +17,11 @@ from PyQt5.QtWidgets import QWidget, QDesktopWidget, QComboBox, QLabel, QLineEdi
 from PyQt5 import QtWidgets
 import magic
 
+from src.api.Pusher import pusherClient, pusherServer
 from src.classes.Helper import Helper
 from src.classes.Log import Log
+from pymitter import EventEmitter
+ee = EventEmitter()
 
 
 class RhScreen(QWidget):
@@ -32,6 +35,8 @@ class RhScreen(QWidget):
     current_job = None
     callback_queue = queue.Queue()
     timer = QTimer()
+    emitter = QtCore.pyqtSignal(object)
+
 
     def __init__(self, app):
         self.app = app
@@ -76,6 +81,32 @@ class RhScreen(QWidget):
 
         self.job = {}
 
+        self.emitter.connect(self.on_job_completed)
+
+
+    def initializing(self):
+        pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
+        self.get_job_list()
+        self.log = Log(self.app)
+        self.log.info("Starting application", self.console)
+        self.log.info("Retrieving job list", self.console)
+        self.log.info("Retrieving Logs", self.console)
+        self.get_job_logs()
+
+        self.get_software_list()
+
+    def connection_handler(self, event):
+        print(event)
+        channel = pusherClient.subscribe("job_channel")
+        channel.bind(self.app.token + '.job_completed', self.callback)
+
+    def callback(self, event):
+        self.emitter.emit(event)
+
+    def on_job_completed(self, arg):
+        print("Job completed", arg)
+        self.get_job_list()
+
     def set_step(self, step):
         self.current_step = step
 
@@ -108,18 +139,6 @@ class RhScreen(QWidget):
                         self.set_step(4)
                     else:
                         self.set_step(5)
-
-    def initializing(self):
-        self.get_job_list()
-        self.app.timer.timeout.connect(self.get_job_list)
-        self.log = Log(self.app)
-        self.log.info("Starting application", self.console)
-        self.log.info("Retrieving job list", self.console)
-        self.app.timer.start()
-        self.log.info("Retrieving Logs", self.console)
-        self.get_job_logs()
-
-        self.get_software_list()
 
     def get_software_list(self):
         self.log.info("Getting software list", self.console)
@@ -182,7 +201,6 @@ class RhScreen(QWidget):
             self.job_summary.clear()
             self.get_job_logs()
             if j and 'status' in j:
-                #self.app.job_info_timer.stop()
                 if j['status'] == 'completed':
                     self.set_step(8)
                     self.job_summary.append("Job finished!!")
@@ -194,6 +212,7 @@ class RhScreen(QWidget):
                     self.job_summary.append("Duration: %s" % j['duration'])
 
     def get_job_list(self):
+
         jobs = self.app.api.get("/job/list")
         print("Getting job list\n")
         row = 0
@@ -343,8 +362,6 @@ class RhScreen(QWidget):
 
     def submit_job(self):
 
-        # self.app.job_info_timer.stop()
-
         if "software_id" not in self.job:
             self.log.info("Please select software", self.console, True)
             return
@@ -364,8 +381,9 @@ class RhScreen(QWidget):
             self.log.info("Creating job", self.console)
 
             self.current_job = self.app.api.upload("/job/create", {
-                "host_id": self.job['host_id'],
-                "software_id": self.job['software_id'],
+                "token": self.app.token,
+                "host_id": str(self.job['host_id']),
+                "software_id": str(self.job['software_id']),
                 "run_file": os.path.basename(self.job['run_file'])
             })
 
@@ -420,9 +438,12 @@ class RhScreen(QWidget):
         self.upload_bar.setValue(completed)
 
         if percent == 100:
-            # self.get_job_list()
             self.log.info("File successfully transferred", self.console)
             self.log.info("Job submitted", self.console, True)
+
+            # Todo Send event to SH
+            pusherServer.trigger("job_channel", self.current_job["sh_token"] + ".job_assignments", self.current_job)
+
             self.clear_form()
             self.set_step(6)
             self.callback_queue.task_done()
@@ -444,7 +465,6 @@ class RhScreen(QWidget):
         if percent == 100:
             self.log.info("File successfully transferred", self.console)
             self.set_step(6)
-            # self.app.job_info_timer.start(2000)
 
         pass
 
@@ -510,7 +530,6 @@ class RhScreen(QWidget):
             self.set_step(9)
 
     def reselect_host(self, software_id, select_box):
-        self.app.timer.stop()
         host = self.app.api.get("/software/%s/verified-hosts" % software_id)
         if host:
             select_box.clear()
@@ -521,9 +540,12 @@ class RhScreen(QWidget):
 
     def reassign_host(self, select_box, job_id):
         new_host_id = select_box.itemData(select_box.currentIndex())
-        self.app.api.put("/job/%s/item" % job_id, {"host_id": new_host_id})
-        self.get_job_list()
-        self.app.timer.start()
+        job = self.app.api.put("/job/%s/item" % job_id, {"host_id": new_host_id})
+        if job:
+            # Todo Send event to SH
+            pusherServer.trigger("job_channel", job["sh_token"] + ".job_assignments", job)
+            self.get_job_list()
 
     def logout(self):
+        pusherClient.unsubscribe(self.app.token + '.job_completed')
         self.app.logout()

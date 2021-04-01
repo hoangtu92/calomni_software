@@ -1,5 +1,5 @@
 import logging
-import os, platform, re, shutil
+import os, platform, re, shutil, json
 import subprocess
 import urllib
 import webbrowser
@@ -15,6 +15,7 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QPushButton, QLineEdit, QLabel, \
     QVBoxLayout
 
+from src.api.Pusher import pusherServer, pusherClient
 from src.classes.Software import Software
 from src.classes.Alert import Alert
 from src.classes.Config import Config
@@ -28,27 +29,27 @@ def update_task(job_id, status, file_name=None):
     if file_name is not None:
         fields['data'] = (os.path.basename(file_name), open(file_name, 'rb'), mime.from_file(file_name))
     try:
-        Api.silence_upload("/job/%s/update_task" % job_id, fields)
+        r = Api.silence_upload("/job/%s/update_task" % job_id, fields)
+        #print("Update success", r.json())
     except:
+        print("update failed")
         pass
-    # self.app.log.debug(r)
 
 
 def run_job(j):
-    # Save all files to environment folder
 
+    # Save all files to environment folder
+    print("running job", j)
     path = Config.home_dir + "/environment/" + j['path']
+
     file_name = path + '.zip'
 
     # Begin the task
-    update_task(j['job_id'], "running")
+    update_task(j['id'], "running")
 
     # Save file
-    # self.app.log.info("Save job file to: " + file_name)
     job_file = download(j['file_url'])
     open(file_name, "wb").write(job_file)
-
-
 
     # Extract file
     with ZipFile(file_name, 'r') as zip_ref:
@@ -65,21 +66,18 @@ def run_job(j):
 
         command = "cd %s; %s" % (path, j['command'])
 
-        try:
-            result = os.popen(command).read()
-            log.info(result)
+        print("Executing job\n")
+        result = os.popen(command).read()
+        log.info(result)
 
-            make_archive(path, 'zip', path)
-            update_task(j['job_id'], 'completed', file_name)
+        make_archive(path, 'zip', path)
+        update_task(j['id'], 'completed', file_name)
 
-            # Clean working directory
-            os.remove(file_name)
-            shutil.rmtree(path)
-        except:
-            update_task(j['job_id'], "failed")
-            shutil.rmtree(path)
+        # Clean working directory
+        os.remove(file_name)
+        shutil.rmtree(path)
 
-
+        pusherServer.trigger("job_channel", j["rh_token"] + ".job_completed", {})
 
 
 class ShScreen(QWidget):
@@ -87,6 +85,7 @@ class ShScreen(QWidget):
     current_host = None
     items = 0
     cols = 4
+    pool = Pool(cpu_count())
 
     def __init__(self, app):
         self.app = app
@@ -189,6 +188,24 @@ class ShScreen(QWidget):
 
         self.software_list.setColumnStretch(self.cols + 1, 1)
 
+    def initializing(self):
+        pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
+        self.get_host_info()
+        self.get_software_list()
+        self.get_affiliates()
+        pass
+
+    def connection_handler(self, event):
+        print(event)
+        channel = pusherClient.subscribe("job_channel")
+        channel.bind(self.app.token + ".job_assignments", self.callback)
+        self.fetch_jobs()
+
+    def callback(self, job):
+        print("Job Assignments", job)
+        job = json.loads(job)
+        self.pool.apply_async(run_job, (job,))
+
     def get_affiliates(self):
         r = self.app.api.get("/affiliates")
         if r:
@@ -237,7 +254,7 @@ class ShScreen(QWidget):
 
     def get_software_list(self, keyword=None, search=None):
 
-        params = {"keyword": "", "search": ""}
+        params = {"keyword": "", "search": "", "token": self.app.token}
 
         if keyword is not None:
             params["keyword"] = keyword
@@ -333,14 +350,6 @@ class ShScreen(QWidget):
 
         return r
 
-    def initializing(self):
-        self.app.timer.timeout.connect(self.fetch_jobs)
-        self.get_host_info()
-        self.get_software_list()
-        self.app.timer.start(5000)
-        self.get_affiliates()
-        pass
-
     def save(self, idx=None):
         if idx is None:
             idx = 0
@@ -400,10 +409,10 @@ class ShScreen(QWidget):
 
         job = self.app.api.get("/job/assignments", {"token": self.app.token})
         if job:
-            pool = Pool(cpu_count())
-            pool.imap(run_job, job)
+            self.pool.map_async(run_job, job)
 
         pass
 
     def logout(self):
+        pusherClient.unsubscribe(self.app.token + ".job_assignments")
         self.app.logout()

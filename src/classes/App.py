@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 from pathlib import Path
 
@@ -6,6 +7,7 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QWidget
 
 from src.api.Api import Api
+from src.api.Pusher import pusherClient
 from src.classes.Config import Config
 from src.classes.Helper import Helper
 from src.classes.Log import Log
@@ -21,6 +23,7 @@ class App(QWidget):
     rh_screen = None
     sh_screen = None
     timer = QTimer()
+    pInfo = None
 
 
     def __init__(self, main):
@@ -70,9 +73,14 @@ class App(QWidget):
                 if user['role'] == 'rh':
                     self.rh_screen.show()
                     self.rh_screen.initializing()
+
                 elif user['role'] == 'sh':
                     self.sh_screen.show()
                     self.sh_screen.initializing()
+
+                pusherClient.connect()
+
+
         else:
             self.login_screen.show()
 
@@ -82,7 +90,9 @@ class App(QWidget):
     def logout(self):
         Config.save_token("")
         self.exit_handler()
-        exit()
+        self.sh_screen.hide()
+        self.rh_screen.hide()
+        self.login_screen.show()
         pass
 
     def exit_handler(self):

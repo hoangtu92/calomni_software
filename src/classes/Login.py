@@ -44,9 +44,11 @@ class Login(QWidget):
             if self.app.api.user['role'] == 'rh':
                 self.app.rh_screen.show()
                 self.app.rh_screen.initializing()
+                self.app.rh_screen.connection_handler({})
             elif self.app.api.user['role'] == 'sh':
                 self.app.sh_screen.show()
                 self.app.sh_screen.initializing()
+                self.app.sh_screen.connection_handler({})
 
     def register(self):
         webbrowser.open("https://calomni.com")
