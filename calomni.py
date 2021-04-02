@@ -3,7 +3,8 @@ import atexit
 from PyQt5.QtWidgets import QApplication
 #from tendo.singleton import SingleInstance
 
-from src.classes.App import App
+from src.classes.App import App, exit_handler
+
 #me = SingleInstance()
 
 if __name__ == '__main__':
@@ -13,4 +14,4 @@ if __name__ == '__main__':
     a = App(app)
     app.exec_()
 
-    atexit.register(a.exit_handler)
+    atexit.register(exit_handler)

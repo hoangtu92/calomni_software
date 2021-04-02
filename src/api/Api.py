@@ -217,12 +217,12 @@ class Api:
             resp = requests.post(Api.apiUrl + endpoint, data=m,
                                  headers={"Content-Type": m.content_type, "Accept": "application/json",
                                           "Authorization": "Bearer " + Api.bearer})
-
             if return_value:
                 return_value.value = resp
 
             return resp
         except:
+            print("Failed", endpoint, data)
             return False
         pass
 

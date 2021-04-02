@@ -17,6 +17,13 @@ from src.classes.ShScreen import ShScreen
 from getmac import get_mac_address as gma
 
 
+def exit_handler():
+    print('Exit application')
+    home_dir = str(Path.home()) + "/calomni_software"
+    Helper.clear_folder("%s/environment/" % home_dir)
+    Helper.clear_folder("%s/.tmp/" % home_dir)
+
+
 class App(QWidget):
     api = None
     login_screen = None
@@ -89,14 +96,8 @@ class App(QWidget):
 
     def logout(self):
         Config.save_token("")
-        self.exit_handler()
+        exit_handler()
         self.sh_screen.hide()
         self.rh_screen.hide()
         self.login_screen.show()
         pass
-
-    def exit_handler(self):
-        print('Exit application')
-        home_dir = str(Path.home()) + "/calomni_software"
-        Helper.clear_folder("%s/environment/" % home_dir)
-        Helper.clear_folder("%s/.tmp/" % home_dir)

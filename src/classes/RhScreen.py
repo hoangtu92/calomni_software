@@ -81,7 +81,7 @@ class RhScreen(QWidget):
 
         self.job = {}
 
-        self.emitter.connect(self.on_job_completed)
+        self.emitter.connect(self.on_job_status_update)
 
 
     def initializing(self):
@@ -98,13 +98,15 @@ class RhScreen(QWidget):
     def connection_handler(self, event):
         print(event)
         channel = pusherClient.subscribe("job_channel")
-        channel.bind(self.app.token + '.job_completed', self.callback)
+        channel.bind(self.app.token + '.job_completed', self.job_handle)
+        channel.bind(self.app.token + '.job_running', self.job_handle)
 
-    def callback(self, event):
+    def job_handle(self, event):
         self.emitter.emit(event)
 
-    def on_job_completed(self, arg):
-        print("Job completed", arg)
+    #
+    def on_job_status_update(self, arg):
+        print("Job status", arg)
         self.get_job_list()
 
     def set_step(self, step):
@@ -426,7 +428,8 @@ class RhScreen(QWidget):
         if not self.is_cancel_upload:
             self.is_cancel_upload = True
             self.log.info("Upload canceled", self.console)
-            self.app.api.delete("/job/%s/item" % self.current_job['id'])
+            if self.current_job:
+                self.app.api.delete("/job/%s/item" % self.current_job['id'])
             self.clear_form()
 
     '''Pycurl Monitor'''
@@ -503,12 +506,16 @@ class RhScreen(QWidget):
         r = self.app.api.post("/job/%s/start" % job_id)
         if r:
             self.log.info("Job started", self.console)
+            pusherServer.trigger("job_channel", r["sh_token"] + ".job_assignments", r)
 
     def stop_job(self, job_id):
         print("stop job id: %s" % job_id)
         r = self.app.api.post("/job/%s/stop" % job_id)
         if r:
+            print("Job stopped", r)
+            pusherServer.trigger("job_channel", r["sh_token"] + ".job_stop", r)
             self.log.info("Job stopped", self.console)
+            self.get_job_list()
         pass
 
     def download_report(self, job_id):
@@ -541,10 +548,9 @@ class RhScreen(QWidget):
     def reassign_host(self, select_box, job_id):
         new_host_id = select_box.itemData(select_box.currentIndex())
         job = self.app.api.put("/job/%s/item" % job_id, {"host_id": new_host_id})
-        if job:
+        '''if job:
             # Todo Send event to SH
-            pusherServer.trigger("job_channel", job["sh_token"] + ".job_assignments", job)
-            self.get_job_list()
+            pusherServer.trigger("job_channel", job["sh_token"] + ".job_assignments", job)'''
 
     def logout(self):
         pusherClient.unsubscribe(self.app.token + '.job_completed')

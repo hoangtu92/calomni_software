@@ -1,9 +1,11 @@
 import logging
+import multiprocessing
 import os, platform, re, shutil, json
+import shlex
 import subprocess
 import urllib
 import webbrowser
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, current_process, active_children
 from os.path import dirname, abspath
 from shutil import make_archive
 from zipfile import ZipFile
@@ -22,30 +24,38 @@ from src.classes.Config import Config
 from src.classes.Switcher import Switcher
 
 
-def update_task(job_id, status, file_name=None):
+def update_task(job_id, status, pid=None, file_name=None):
     fields = {
-        'status': status
+        'status': status,
+        'pid': str(pid)
     }
+
     if file_name is not None:
         fields['data'] = (os.path.basename(file_name), open(file_name, 'rb'), mime.from_file(file_name))
+
     try:
+        print(fields)
         r = Api.silence_upload("/job/%s/update_task" % job_id, fields)
-        #print("Update success", r.json())
+        #print("raw", r.json())
+        return r.json()
     except:
         print("update failed")
+        return False
         pass
 
 
 def run_job(j):
-
+    p = current_process()
     # Save all files to environment folder
-    print("running job", j)
+    print("running job", p.pid)
     path = Config.home_dir + "/environment/" + j['path']
 
     file_name = path + '.zip'
 
     # Begin the task
-    update_task(j['id'], "running")
+    t = update_task(j['id'], "running", p.pid)
+    print("Job is running", t["data"])
+    pusherServer.trigger("job_channel", j["rh_token"] + ".job_running", {"status": "running", "job_id": t["data"]["job_id"]})
 
     # Save file
     job_file = download(j['file_url'])
@@ -66,18 +76,26 @@ def run_job(j):
 
         command = "cd %s; %s" % (path, j['command'])
 
-        print("Executing job\n")
-        result = os.popen(command).read()
-        log.info(result)
+        #args = shlex.split(command)
+
+        proc = subprocess.run(command, stdout=subprocess.PIPE, shell=True, close_fds=False)
+        #update_task(j['id'], "running", proc.pid)
+        print("Executing job")
+
+        #proc.wait()
+
+        #proc_stdout = proc.communicate()[0].strip()
+        #log.info(proc_stdout.decode())
 
         make_archive(path, 'zip', path)
-        update_task(j['id'], 'completed', file_name)
+        t = update_task(j['id'], 'completed', None, file_name)
 
         # Clean working directory
         os.remove(file_name)
         shutil.rmtree(path)
 
-        pusherServer.trigger("job_channel", j["rh_token"] + ".job_completed", {})
+        print("Job completed")
+        pusherServer.trigger("job_channel", j["rh_token"] + ".job_completed", t)
 
 
 class ShScreen(QWidget):
@@ -198,13 +216,32 @@ class ShScreen(QWidget):
     def connection_handler(self, event):
         print(event)
         channel = pusherClient.subscribe("job_channel")
-        channel.bind(self.app.token + ".job_assignments", self.callback)
+        channel.bind(self.app.token + ".job_assignments", self.job_assignments)
+        channel.bind(self.app.token + ".job_stop", self.job_stop)
         self.fetch_jobs()
 
-    def callback(self, job):
+    def job_assignments(self, job):
         print("Job Assignments", job)
         job = json.loads(job)
         self.pool.apply_async(run_job, (job,))
+
+    def job_stop(self, task):
+        task = json.loads(task)
+        print("Job Stop", task)
+        for p in active_children():
+            print("Child process", p.pid)
+            if task["pid"] == str(p.pid):
+                print("Kill process", p.pid)
+                p.terminate()
+                print("Pid", p.is_alive())
+                # Clean working directory
+                path = Config.home_dir + "/environment/" + task['path']
+                file_name = path + '.zip'
+                os.remove(file_name)
+                shutil.rmtree(path)
+
+
+
 
     def get_affiliates(self):
         r = self.app.api.get("/affiliates")
