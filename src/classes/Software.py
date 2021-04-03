@@ -3,7 +3,7 @@ import urllib.request
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QLabel, QCheckBox, QLineEdit, QWidget, QGridLayout
+from PyQt5.QtWidgets import QLabel, QCheckBox, QLineEdit, QWidget, QGridLayout, QHBoxLayout, QVBoxLayout
 
 
 class Software(QWidget):
@@ -11,19 +11,32 @@ class Software(QWidget):
     def __init__(self, sh, obj):
         QWidget.__init__(self)
 
-        self.setAutoFillBackground(True)
-        self.setStyleSheet("background-color: white;")
-
         self.obj = obj
         self.sh = sh
 
+        self.setAutoFillBackground(True)
+
+        self.setStyleSheet("background-color: white;  border-radius: 5; border: 1px solid #EDEDED")
+
         grid = QGridLayout()
+
+        wrapper = QWidget()
+        wrapper_layout = QVBoxLayout()
 
         self.pic = QLabel()
         self.checked = QCheckBox()
         self.status = QLineEdit()
         self.note = QLineEdit()
         self.fee = QLineEdit()
+
+        self.pic.setStyleSheet("padding: 0; border: none")
+
+        self.checked.setStyleSheet("border: none")
+        self.note.setStyleSheet("padding:5")
+        self.fee.setStyleSheet("padding:5")
+
+        self.note.setPlaceholderText("Note")
+        self.fee.setPlaceholderText("Fee")
 
         self.pic.setFixedWidth(170)
         self.pic.setFixedHeight(170)
@@ -35,11 +48,13 @@ class Software(QWidget):
 
         self.status.setDisabled(True)
 
-        if self.obj['executable'] == '1':
+        if str(self.obj['executable']) == '1':
             # self.checked.setChecked(True)
             self.status.setText("Verified")
+            self.status.setStyleSheet("padding: 5;color: lime")
         else:
             self.status.setText("UnVerified")
+            self.status.setStyleSheet("padding: 5;color: red")
 
         if self.obj['note'] is not None:
             self.note.setText("%s" % self.obj['note'])
@@ -53,9 +68,9 @@ class Software(QWidget):
         grid.addWidget(self.note, 2, 0, 1, 10)
         grid.addWidget(self.fee, 3, 0, 1, 10)
 
-
-
-        self.setLayout(grid)
+        wrapper.setLayout(grid)
+        wrapper_layout.addWidget(wrapper)
+        self.setLayout(wrapper_layout)
 
         # self.checked.clicked.connect(self.test)
 

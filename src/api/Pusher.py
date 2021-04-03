@@ -1,5 +1,10 @@
+import hashlib
 import pusher
 import pysher
+from getmac import get_mac_address as gma
+
+
+mac = gma()
 
 pInfo = {
             "app_id": "1181549",
@@ -9,6 +14,8 @@ pInfo = {
             "host": 'calomni.com',
             "port": 6001
         }
+
+device_token = hashlib.md5(mac.encode("utf-8")).hexdigest()
 
 pusherServer = pusher.Pusher(pInfo["app_id"], pInfo["key"], pInfo["secret"], cluster=pInfo["cluster"], host=pInfo["host"], port=pInfo["port"], ssl=False)
 

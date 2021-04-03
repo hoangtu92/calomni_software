@@ -20,9 +20,6 @@ import magic
 from src.api.Pusher import pusherClient, pusherServer
 from src.classes.Helper import Helper
 from src.classes.Log import Log
-from pymitter import EventEmitter
-ee = EventEmitter()
-
 
 class RhScreen(QWidget):
     app = None
@@ -104,7 +101,7 @@ class RhScreen(QWidget):
     def job_handle(self, event):
         self.emitter.emit(event)
 
-    #
+    @QtCore.pyqtSlot(object)
     def on_job_status_update(self, arg):
         print("Job status", arg)
         self.get_job_list()

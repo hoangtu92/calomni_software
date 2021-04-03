@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 import os, platform, re, shutil, json
 import shlex
+import signal
 import subprocess
 import urllib
 import webbrowser
@@ -13,16 +14,15 @@ from zipfile import ZipFile
 from PyQt5.QtGui import QPixmap, QIcon
 
 from src.api.Api import download, Api, mime
-from PyQt5 import uic
+from PyQt5 import uic, QtCore
 from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QPushButton, QLineEdit, QLabel, \
     QVBoxLayout
 
-from src.api.Pusher import pusherServer, pusherClient
+from src.api.Pusher import pusherServer, pusherClient, device_token
 from src.classes.Software import Software
 from src.classes.Alert import Alert
 from src.classes.Config import Config
 from src.classes.Switcher import Switcher
-
 
 def update_task(job_id, status, pid=None, file_name=None):
     fields = {
@@ -42,7 +42,6 @@ def update_task(job_id, status, pid=None, file_name=None):
         print("update failed")
         return False
         pass
-
 
 def run_job(j):
     p = current_process()
@@ -74,28 +73,33 @@ def run_job(j):
         log.setLevel(logging.INFO)
         log.addHandler(handler)
 
-        command = "cd %s; %s" % (path, j['command'])
+        cmd = open("%s/%s" % (path, j["run_file"])).readline()
+        command = "%s & echo $!" % cmd
 
-        #args = shlex.split(command)
+        print("Running ", command)
 
-        proc = subprocess.run(command, stdout=subprocess.PIPE, shell=True, close_fds=False)
-        #update_task(j['id'], "running", proc.pid)
-        print("Executing job")
+        proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=path, shell=True)
 
-        #proc.wait()
+        pid = proc.stdout.readline().strip().decode()
+        update_task(j['id'], "running", pid)
+        print("Executing job", pid)
 
-        #proc_stdout = proc.communicate()[0].strip()
-        #log.info(proc_stdout.decode())
+        proc_stdout, proc_stderr = proc.communicate()
 
-        make_archive(path, 'zip', path)
-        t = update_task(j['id'], 'completed', None, file_name)
+        print(proc_stdout.strip().decode(), proc_stderr.strip().decode())
+        log.info(proc_stdout.strip().decode())
+        log.info(proc_stderr.strip().decode())
+
+        print("Exit code %s", proc.returncode)
+        if proc.returncode == 0:
+            make_archive(path, 'zip', path)
+            t = update_task(j['id'], 'completed', None, file_name)
+            print("Job completed")
+            pusherServer.trigger("job_channel", j["rh_token"] + ".job_completed", t)
 
         # Clean working directory
         os.remove(file_name)
         shutil.rmtree(path)
-
-        print("Job completed")
-        pusherServer.trigger("job_channel", j["rh_token"] + ".job_completed", t)
 
 
 class ShScreen(QWidget):
@@ -217,8 +221,12 @@ class ShScreen(QWidget):
         print(event)
         channel = pusherClient.subscribe("job_channel")
         channel.bind(self.app.token + ".job_assignments", self.job_assignments)
+        channel.bind("pusher:member_added", self.member_added)
         channel.bind(self.app.token + ".job_stop", self.job_stop)
         self.fetch_jobs()
+
+    def member_added(self, event):
+        print("Member Added", event)
 
     def job_assignments(self, job):
         print("Job Assignments", job)
@@ -227,20 +235,12 @@ class ShScreen(QWidget):
 
     def job_stop(self, task):
         task = json.loads(task)
-        print("Job Stop", task)
-        for p in active_children():
-            print("Child process", p.pid)
-            if task["pid"] == str(p.pid):
-                print("Kill process", p.pid)
-                p.terminate()
-                print("Pid", p.is_alive())
-                # Clean working directory
-                path = Config.home_dir + "/environment/" + task['path']
-                file_name = path + '.zip'
-                os.remove(file_name)
-                shutil.rmtree(path)
-
-
+        try:
+            os.kill(int(task["pid"]), signal.SIGTERM)
+        except Exception as e:
+            print(e)
+        else:
+            print("Terminated %s" % task["pid"] )
 
 
     def get_affiliates(self):
@@ -423,12 +423,15 @@ class ShScreen(QWidget):
 
     def toggle_online_offline(self):
         if self.host_active:
+            pusherClient.unsubscribe(self.app.token + ".job_assignments")
             status = 'inactive'
             self.active_switcher.setChecked(False)
             self.bottom.setStyleSheet("background:red;")
             self.status.setText("Status: Inactive")
             self.host_active = False
+
         else:
+            pusherClient.subscribe(self.app.token + ".job_assignments")
             status = 'active'
             self.active_switcher.setChecked(True)
             self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
@@ -446,7 +449,7 @@ class ShScreen(QWidget):
 
         job = self.app.api.get("/job/assignments", {"token": self.app.token})
         if job:
-            self.pool.map_async(run_job, job)
+            self.pool.map_async(run_job, (job,))
 
         pass
 
