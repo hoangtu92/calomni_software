@@ -129,6 +129,8 @@ class RhScreen(QWidget):
         self.emitter.emit({"action": "member_online", "data": event})
 
     def job_handle(self, event):
+        print("Job status changed", event)
+        event = json.loads(event)
         self.emitter.emit({"action": "job_status", "data": event})
 
     @QtCore.pyqtSlot(object)
@@ -290,12 +292,15 @@ class RhScreen(QWidget):
             if "price" in j:
                 self.job_list.setItem(row, 3, QtWidgets.QTableWidgetItem("$NT %s" % j['price']))
             if "status" in j:
-                self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem(j['status']))
+                status = j["status"]
+                if args is not None and args["action"] == "job_status" and str(args["data"]["job_id"]) == str(j["id"]):
+                    status = args["data"]["status"]
+                self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem(status))
 
                 group = QtWidgets.QWidget()
                 l = QtWidgets.QHBoxLayout()
 
-                if j['status'] == 'completed':
+                if status == 'completed':
                     dl = QtWidgets.QPushButton()
                     dl.setIcon(QIcon("./src/gui/images/medium/download.png"))
                     dl.clicked.connect(lambda state, x=j['id']: self.download_report(x))
@@ -304,7 +309,7 @@ class RhScreen(QWidget):
                     dl.setFlat(True)
                     l.addWidget(dl, 0, QtCore.Qt.AlignLeft)
 
-                elif j['status'] == 'pending' or j['status'] == 'running':
+                elif status == 'pending' or status == 'running':
                     stop = QtWidgets.QPushButton()
                     stop.setIcon(QIcon("./src/gui/images/medium/stop.png"))
                     stop.clicked.connect(lambda state, x=j['id']: self.stop_job(x))
@@ -314,7 +319,7 @@ class RhScreen(QWidget):
                     l.addWidget(stop, 0, QtCore.Qt.AlignLeft)
                     pass
 
-                elif j['status'] == 'stopped' or j['status'] == 'failed':
+                elif status == 'stopped' or status == 'failed':
 
                     start = QtWidgets.QPushButton()
                     start.setIcon(QIcon("./src/gui/images/medium/start.png"))
@@ -557,6 +562,7 @@ class RhScreen(QWidget):
 
         # job_id = self.job_list.item(row, 0)
         # print("Selected Job ID %s" % job_id)
+        self.log.info("Downloading job report...", self.console)
         j = self.app.api.get("/job/%s/download_report" % job_id)
 
         if j:

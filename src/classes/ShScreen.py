@@ -95,7 +95,7 @@ def run_job(j):
             make_archive(path, 'zip', path)
             t = update_task(j['id'], 'completed', None, file_name)
             print("Job completed")
-            pusherServer.trigger(job_channel, j["rh_token"] + ".job_completed", t)
+            pusherServer.trigger(job_channel, j["rh_token"] + ".job_completed", {"status": "completed", "job_id": t["data"]["job_id"]})
 
         # Clean working directory
         os.remove(file_name)
@@ -211,8 +211,8 @@ class ShScreen(QWidget):
         self.software_list.setColumnStretch(self.cols + 1, 1)
 
     def initializing(self):
-        pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
         self.get_host_info()
+        pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
         self.get_software_list()
         self.get_affiliates()
         pass
@@ -226,11 +226,12 @@ class ShScreen(QWidget):
     def connection_handler(self, event=None):
         event = json.loads(event)
         print(event)
-        if event["socket_id"]:
-            self.app.socket_id = str(event["socket_id"])
-            self.init_pusher()
-        else:
-            pusherClient.connect()
+        if self.host_active:
+            if event["socket_id"]:
+                self.app.socket_id = str(event["socket_id"])
+                self.init_pusher()
+            else:
+                pusherClient.connect()
 
     def job_assignments(self, job):
         print("Job Assignments", job)
@@ -435,12 +436,14 @@ class ShScreen(QWidget):
             self.host_active = False
 
         else:
-            pusherClient.subscribe(job_channel)
+            self.host_active = True
             status = 'active'
+            self.init_pusher()
             self.active_switcher.setChecked(True)
             self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
             self.status.setText("Status: Active")
-            self.host_active = True
+
+
 
         self.app.api.post("/host/item/%s" % self.app.token, {"status": status})
 
@@ -453,7 +456,7 @@ class ShScreen(QWidget):
 
         job = self.app.api.get("/job/assignments", {"token": self.app.token})
         if job:
-            self.pool.map_async(run_job, (job,))
+            self.pool.map_async(run_job, job)
 
         pass
 

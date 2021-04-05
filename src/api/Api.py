@@ -98,6 +98,7 @@ class Api:
         # Success
         if resp.status_code == 200 or resp.status_code == 201:
             result = resp.json()
+            print(result)
             if 'status' in result:
                 if result['status']:
                     if "message" in result and result["message"]:
@@ -127,10 +128,6 @@ class Api:
         return False
 
     def show_error(self, msg, callback=None):
-        try:
-            self.app.timer.stop()
-        except:
-            pass
         self.app.log.error(msg, None, True, callback)
 
     '''get request'''
@@ -214,9 +211,10 @@ class Api:
             m = MultipartEncoderMonitor(m, callback)
 
         try:
+            bearer = Config.load_token()
             resp = requests.post(Api.apiUrl + endpoint, data=m,
                                  headers={"Content-Type": m.content_type, "Accept": "application/json",
-                                          "Authorization": "Bearer " + Api.bearer})
+                                          "Authorization": "Bearer " + bearer})
             if return_value:
                 return_value.value = resp
 
@@ -232,8 +230,9 @@ class Api:
             return False
 
         try:
+            bearer = Config.load_token()
             resp = requests.get(Api.apiUrl + endpoint, params=params,
-                                headers={"Accept": "application/json", "Authorization": "Bearer " + Api.bearer})
+                                headers={"Accept": "application/json", "Authorization": "Bearer " + bearer})
 
             return resp.json()
 
@@ -295,9 +294,11 @@ class Api:
         c.setopt(pycurl.URL, url)
         c.setopt(pycurl.NOPROGRESS, 0)
 
+        bearer = Config.load_token()
+
         c.setopt(pycurl.HTTPHEADER, [
             "Accept: application/json",
-            "Authorization: Bearer " + Api.bearer
+            "Authorization: Bearer " + bearer
         ])
 
         if progress:
