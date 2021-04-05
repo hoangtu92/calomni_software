@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import queue
@@ -17,7 +18,7 @@ from PyQt5.QtWidgets import QWidget, QDesktopWidget, QComboBox, QLabel, QLineEdi
 from PyQt5 import QtWidgets
 import magic
 
-from src.api.Pusher import pusherClient, pusherServer
+from src.api.Pusher import pusherClient, pusherServer, job_channel
 from src.classes.Helper import Helper
 from src.classes.Log import Log
 
@@ -33,7 +34,8 @@ class RhScreen(QWidget):
     callback_queue = queue.Queue()
     timer = QTimer()
     emitter = QtCore.pyqtSignal(object)
-
+    jobs = []
+    online_hosts = []
 
     def __init__(self, app):
         self.app = app
@@ -78,8 +80,7 @@ class RhScreen(QWidget):
 
         self.job = {}
 
-        self.emitter.connect(self.on_job_status_update)
-
+        self.emitter.connect(self.on_event_callback)
 
     def initializing(self):
         pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
@@ -92,19 +93,48 @@ class RhScreen(QWidget):
 
         self.get_software_list()
 
-    def connection_handler(self, event):
+    def connection_handler(self, event=None):
+        event = json.loads(event)
         print(event)
-        channel = pusherClient.subscribe("job_channel")
+        if event["socket_id"]:
+            self.app.socket_id = str(event["socket_id"])
+            self.init_pusher()
+        else:
+            pusherClient.connect()
+
+    def init_pusher(self):
+        channel = pusherClient.subscribe(job_channel)
+        channel.bind("pusher_internal:subscription_succeeded", self.subscription_succeeded)
+        channel.bind("pusher_internal:member_added", self.member_added)
+        channel.bind("pusher_internal:member_removed", self.member_removed)
         channel.bind(self.app.token + '.job_completed', self.job_handle)
         channel.bind(self.app.token + '.job_running', self.job_handle)
 
+    def subscription_succeeded(self, event):
+        event  = json.loads(event)
+        print("subscription_succeeded", event)
+        self.online_hosts = event["presence"]["ids"]
+        self.emitter.emit({"action": "member_online", "data": event})
+
+    def member_removed(self, event):
+        print("Member Removed", event)
+        member = json.loads(event)
+        del self.online_hosts[self.online_hosts.index(member["user_id"])]
+        self.emitter.emit({"action": "member_online", "data": event})
+
+    def member_added(self, event):
+        print("Member Added", event)
+        member = json.loads(event)
+        self.online_hosts.append(member["user_id"])
+        self.emitter.emit({"action": "member_online", "data": event})
+
     def job_handle(self, event):
-        self.emitter.emit(event)
+        self.emitter.emit({"action": "job_status", "data": event})
 
     @QtCore.pyqtSlot(object)
-    def on_job_status_update(self, arg):
-        print("Job status", arg)
-        self.get_job_list()
+    def on_event_callback(self, arg):
+        print("Internal Event", arg)
+        self.show_job_list(arg)
 
     def set_step(self, step):
         self.current_step = step
@@ -183,7 +213,10 @@ class RhScreen(QWidget):
         if host:
             self.clear_host()
             for h in host:
-                self.host.addItem("$NT%s: %s" % (h['price'], h['host_info']), h['id'])
+                status = "INACTIVE"
+                if h["token"] in self.online_hosts:
+                    status = "ACTIVE"
+                self.host.addItem("$NT%s: [%s] %s" % (h['price'], status, h['host_info']), h['id'])
 
     def host_selected(self):
         if self.host.currentIndex() >= 0:
@@ -212,107 +245,110 @@ class RhScreen(QWidget):
 
     def get_job_list(self):
 
-        jobs = self.app.api.get("/job/list")
+        self.jobs = self.app.api.get("/job/list")
         print("Getting job list\n")
+        if self.jobs:
+            self.show_job_list()
+
+    def show_job_list(self, args=None):
+        self.job_list.setRowCount(0)
         row = 0
-        if jobs:
-            self.job_list.setRowCount(0)
-            for j in jobs:
-                self.job_list.insertRow(self.job_list.rowCount())
+        for j in self.jobs:
+            self.job_list.insertRow(self.job_list.rowCount())
 
-                if "created_at" in j:
-                    self.job_list.setItem(row, 0, QtWidgets.QTableWidgetItem(j['created_at']))
-                if "software_name" in j:
-                    self.job_list.setItem(row, 1, QtWidgets.QTableWidgetItem(j['software_name']))
-                if "host_info" in j:
+            if "created_at" in j:
+                self.job_list.setItem(row, 0, QtWidgets.QTableWidgetItem(j['created_at']))
+            if "software_name" in j:
+                self.job_list.setItem(row, 1, QtWidgets.QTableWidgetItem(j['software_name']))
+            if "host_info" in j:
 
-                    g = QtWidgets.QWidget()
-                    l = QtWidgets.QHBoxLayout()
+                g = QtWidgets.QWidget()
+                l = QtWidgets.QHBoxLayout()
 
-                    s = QtWidgets.QLabel()
+                s = QtWidgets.QLabel()
 
-                    g.setToolTip(j["host_info"])
-                    g.setToolTipDuration(600000)
+                g.setToolTip(j["host_info"])
+                g.setToolTipDuration(600000)
 
-                    if j['host_activity_status'] == 'active':
-                        pxm = QPixmap("./src/gui/images/medium/online.png")
-                        s.setPixmap(pxm.scaled(8, 8, QtCore.Qt.KeepAspectRatio))
-                    else:
-                        pxm = QPixmap("./src/gui/images/medium/offline.png")
-                        s.setPixmap(pxm.scaled(8, 8, QtCore.Qt.KeepAspectRatio))
+                if j['host_activity_status'] == 'active' or j["sh_token"] in self.online_hosts:
+                    pxm = QPixmap("./src/gui/images/medium/online.png")
+                    s.setPixmap(pxm.scaled(8, 8, QtCore.Qt.KeepAspectRatio))
+                else:
+                    pxm = QPixmap("./src/gui/images/medium/offline.png")
+                    s.setPixmap(pxm.scaled(8, 8, QtCore.Qt.KeepAspectRatio))
 
-                    n = QtWidgets.QLabel()
-                    n.setText(j["host_name"])
+                n = QtWidgets.QLabel()
+                n.setText(j["host_name"])
 
-                    l.addWidget(s, 0, QtCore.Qt.AlignCenter)
-                    l.addWidget(n, 0, QtCore.Qt.AlignCenter)
+                l.addWidget(s, 0, QtCore.Qt.AlignCenter)
+                l.addWidget(n, 0, QtCore.Qt.AlignCenter)
 
-                    g.setLayout(l)
+                g.setLayout(l)
 
-                    self.job_list.setCellWidget(row, 2, g)
+                self.job_list.setCellWidget(row, 2, g)
 
-                if "price" in j:
-                    self.job_list.setItem(row, 3, QtWidgets.QTableWidgetItem("$NT %s" % j['price']))
-                if "status" in j:
-                    self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem(j['status']))
+            if "price" in j:
+                self.job_list.setItem(row, 3, QtWidgets.QTableWidgetItem("$NT %s" % j['price']))
+            if "status" in j:
+                self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem(j['status']))
 
-                    group = QtWidgets.QWidget()
-                    l = QtWidgets.QHBoxLayout()
+                group = QtWidgets.QWidget()
+                l = QtWidgets.QHBoxLayout()
 
-                    if j['status'] == 'completed':
-                        dl = QtWidgets.QPushButton()
-                        dl.setIcon(QIcon("./src/gui/images/medium/download.png"))
-                        dl.clicked.connect(lambda state, x=j['id']: self.download_report(x))
-                        dl.setFixedSize(16, 16)
-                        dl.setToolTip("Download report")
-                        dl.setFlat(True)
-                        l.addWidget(dl, 0, QtCore.Qt.AlignLeft)
+                if j['status'] == 'completed':
+                    dl = QtWidgets.QPushButton()
+                    dl.setIcon(QIcon("./src/gui/images/medium/download.png"))
+                    dl.clicked.connect(lambda state, x=j['id']: self.download_report(x))
+                    dl.setFixedSize(16, 16)
+                    dl.setToolTip("Download report")
+                    dl.setFlat(True)
+                    l.addWidget(dl, 0, QtCore.Qt.AlignLeft)
 
-                    elif j['status'] == 'pending' or j['status'] == 'running':
-                        stop = QtWidgets.QPushButton()
-                        stop.setIcon(QIcon("./src/gui/images/medium/stop.png"))
-                        stop.clicked.connect(lambda state, x=j['id']: self.stop_job(x))
-                        stop.setFixedSize(16, 16)
-                        stop.setToolTip("Stop job")
-                        stop.setFlat(True)
-                        l.addWidget(stop, 0, QtCore.Qt.AlignLeft)
-                        pass
+                elif j['status'] == 'pending' or j['status'] == 'running':
+                    stop = QtWidgets.QPushButton()
+                    stop.setIcon(QIcon("./src/gui/images/medium/stop.png"))
+                    stop.clicked.connect(lambda state, x=j['id']: self.stop_job(x))
+                    stop.setFixedSize(16, 16)
+                    stop.setToolTip("Stop job")
+                    stop.setFlat(True)
+                    l.addWidget(stop, 0, QtCore.Qt.AlignLeft)
+                    pass
 
-                    elif j['status'] == 'stopped' or j['status'] == 'failed':
+                elif j['status'] == 'stopped' or j['status'] == 'failed':
 
-                        start = QtWidgets.QPushButton()
-                        start.setIcon(QIcon("./src/gui/images/medium/start.png"))
-                        start.setFixedSize(16, 16)
-                        start.setFlat(True)
-                        start.setIconSize(QSize(16, 16))
-                        start.setToolTip("Start job")
-                        start.clicked.connect(lambda state, x=j['id']: self.start_job(x))
+                    start = QtWidgets.QPushButton()
+                    start.setIcon(QIcon("./src/gui/images/medium/start.png"))
+                    start.setFixedSize(16, 16)
+                    start.setFlat(True)
+                    start.setIconSize(QSize(16, 16))
+                    start.setToolTip("Start job")
+                    start.clicked.connect(lambda state, x=j['id']: self.start_job(x))
 
-                        l.addWidget(start, 0, QtCore.Qt.AlignLeft)
+                    l.addWidget(start, 0, QtCore.Qt.AlignLeft)
 
-                        h = QtWidgets.QPushButton()
-                        h.setFixedSize(16, 16)
-                        h.setFlat(True)
-                        h.setIconSize(QSize(16, 16))
-                        h.setIcon(QIcon("./src/gui/images/medium/reselecthost.png"))
-                        h.setToolTip("Reselect host")
+                    h = QtWidgets.QPushButton()
+                    h.setFixedSize(16, 16)
+                    h.setFlat(True)
+                    h.setIconSize(QSize(16, 16))
+                    h.setIcon(QIcon("./src/gui/images/medium/reselecthost.png"))
+                    h.setToolTip("Reselect host")
 
-                        l.addWidget(h, 0, QtCore.Qt.AlignLeft)
+                    l.addWidget(h, 0, QtCore.Qt.AlignLeft)
 
-                        select_box = QtWidgets.QComboBox()
-                        select_box.setFixedSize(QSize(70, 30))
-                        select_box.setToolTip("Please Select Host")
-                        select_box.activated.connect(lambda state, x=select_box, y=j['id']: self.reassign_host(x, y))
-                        l.addWidget(select_box, 0, QtCore.Qt.AlignLeft)
-                        select_box.hide()
+                    select_box = QtWidgets.QComboBox()
+                    select_box.setFixedSize(QSize(70, 30))
+                    select_box.setToolTip("Please Select Host")
+                    select_box.activated.connect(lambda state, x=select_box, y=j['id']: self.reassign_host(x, y))
+                    l.addWidget(select_box, 0, QtCore.Qt.AlignLeft)
+                    select_box.hide()
 
-                        h.clicked.connect(lambda state, x=j['software_id'], y=select_box: self.reselect_host(x, y))
-                        pass
+                    h.clicked.connect(lambda state, x=j['software_id'], y=select_box: self.reselect_host(x, y))
+                    pass
 
-                    group.setLayout(l)
-                    self.job_list.setCellWidget(row, 5, group)
+                group.setLayout(l)
+                self.job_list.setCellWidget(row, 5, group)
 
-                row += 1
+            row += 1
 
     def browse_file(self):
         options = QtWidgets.QFileDialog.Options()
@@ -442,7 +478,7 @@ class RhScreen(QWidget):
             self.log.info("Job submitted", self.console, True)
 
             # Todo Send event to SH
-            pusherServer.trigger("job_channel", self.current_job["sh_token"] + ".job_assignments", self.current_job)
+            pusherServer.trigger(job_channel, self.current_job["sh_token"] + ".job_assignments", self.current_job)
 
             self.clear_form()
             self.set_step(6)
@@ -503,14 +539,14 @@ class RhScreen(QWidget):
         r = self.app.api.post("/job/%s/start" % job_id)
         if r:
             self.log.info("Job started", self.console)
-            pusherServer.trigger("job_channel", r["sh_token"] + ".job_assignments", r)
+            pusherServer.trigger(job_channel, r["sh_token"] + ".job_assignments", r)
 
     def stop_job(self, job_id):
         print("stop job id: %s" % job_id)
         r = self.app.api.post("/job/%s/stop" % job_id)
         if r:
             print("Job stopped", r)
-            pusherServer.trigger("job_channel", r["sh_token"] + ".job_stop", r)
+            pusherServer.trigger(job_channel, r["sh_token"] + ".job_stop", r)
             self.log.info("Job stopped", self.console)
             self.get_job_list()
         pass
@@ -524,7 +560,7 @@ class RhScreen(QWidget):
         j = self.app.api.get("/job/%s/download_report" % job_id)
 
         if j:
-            report = download(j['file_url'])
+            report = download(j['download_url'])
             f = re.findall(r"(\w+).zip$", j['file_url'])
 
             path = self.app.home_dir + "/reports/" + f[0]
@@ -545,10 +581,11 @@ class RhScreen(QWidget):
     def reassign_host(self, select_box, job_id):
         new_host_id = select_box.itemData(select_box.currentIndex())
         job = self.app.api.put("/job/%s/item" % job_id, {"host_id": new_host_id})
-        '''if job:
+        if job:
             # Todo Send event to SH
-            pusherServer.trigger("job_channel", job["sh_token"] + ".job_assignments", job)'''
+            pusherServer.trigger(job_channel, job["sh_token"] + ".job_assignments", job)
+            self.get_job_list()
 
     def logout(self):
-        pusherClient.unsubscribe(self.app.token + '.job_completed')
+        pusherClient.unsubscribe(job_channel)
         self.app.logout()

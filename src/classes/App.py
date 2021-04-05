@@ -1,9 +1,7 @@
 import hashlib
-import logging
 import os
 from pathlib import Path
 
-from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QWidget
 
 from src.api.Api import Api
@@ -29,15 +27,13 @@ class App(QWidget):
     login_screen = None
     rh_screen = None
     sh_screen = None
-    timer = QTimer()
     pInfo = None
+    socket_id = ""
 
 
     def __init__(self, main):
         QWidget.__init__(self)
         self.main = main
-
-        self.timer.setInterval(5000)
 
         home = str(Path.home())
         self.home_dir = home + "/calomni_software"
@@ -90,9 +86,6 @@ class App(QWidget):
 
         else:
             self.login_screen.show()
-
-    def start_timer(self):
-        self.timer.start(5000)
 
     def logout(self):
         Config.save_token("")

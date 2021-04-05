@@ -4,6 +4,8 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QLineEdit, QPushButton, QDesktopWidget
 import webbrowser
 
+from src.api.Pusher import pusherClient
+
 
 class Login(QWidget):
     email = None
@@ -44,11 +46,17 @@ class Login(QWidget):
             if self.app.api.user['role'] == 'rh':
                 self.app.rh_screen.show()
                 self.app.rh_screen.initializing()
-                self.app.rh_screen.connection_handler({})
+                if pusherClient.connection.is_alive():
+                    self.app.rh_screen.init_pusher()
+                else:
+                    pusherClient.connect()
             elif self.app.api.user['role'] == 'sh':
                 self.app.sh_screen.show()
                 self.app.sh_screen.initializing()
-                self.app.sh_screen.connection_handler({})
+                if pusherClient.connection.is_alive():
+                    self.app.sh_screen.init_pusher()
+                else:
+                    pusherClient.connect()
 
     def register(self):
         webbrowser.open("https://calomni.com")

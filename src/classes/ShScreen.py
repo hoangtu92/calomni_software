@@ -18,7 +18,7 @@ from PyQt5 import uic, QtCore
 from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QPushButton, QLineEdit, QLabel, \
     QVBoxLayout
 
-from src.api.Pusher import pusherServer, pusherClient, device_token
+from src.api.Pusher import pusherServer, pusherClient, device_token, job_channel
 from src.classes.Software import Software
 from src.classes.Alert import Alert
 from src.classes.Config import Config
@@ -54,7 +54,7 @@ def run_job(j):
     # Begin the task
     t = update_task(j['id'], "running", p.pid)
     print("Job is running", t["data"])
-    pusherServer.trigger("job_channel", j["rh_token"] + ".job_running", {"status": "running", "job_id": t["data"]["job_id"]})
+    pusherServer.trigger(job_channel, j["rh_token"] + ".job_running", {"status": "running", "job_id": t["data"]["job_id"]})
 
     # Save file
     job_file = download(j['file_url'])
@@ -73,7 +73,7 @@ def run_job(j):
         log.setLevel(logging.INFO)
         log.addHandler(handler)
 
-        cmd = open("%s/%s" % (path, j["run_file"])).readline()
+        cmd = open("%s/%s" % (path, j["run_file"])).readline().strip()
         command = "%s & echo $!" % cmd
 
         print("Running ", command)
@@ -90,12 +90,12 @@ def run_job(j):
         log.info(proc_stdout.strip().decode())
         log.info(proc_stderr.strip().decode())
 
-        print("Exit code %s", proc.returncode)
+        print("Exit code %s" % proc.returncode)
         if proc.returncode == 0:
             make_archive(path, 'zip', path)
             t = update_task(j['id'], 'completed', None, file_name)
             print("Job completed")
-            pusherServer.trigger("job_channel", j["rh_token"] + ".job_completed", t)
+            pusherServer.trigger(job_channel, j["rh_token"] + ".job_completed", t)
 
         # Clean working directory
         os.remove(file_name)
@@ -217,16 +217,20 @@ class ShScreen(QWidget):
         self.get_affiliates()
         pass
 
-    def connection_handler(self, event):
-        print(event)
-        channel = pusherClient.subscribe("job_channel")
+    def init_pusher(self):
+        channel = pusherClient.subscribe(job_channel)
         channel.bind(self.app.token + ".job_assignments", self.job_assignments)
-        channel.bind("pusher:member_added", self.member_added)
         channel.bind(self.app.token + ".job_stop", self.job_stop)
         self.fetch_jobs()
 
-    def member_added(self, event):
-        print("Member Added", event)
+    def connection_handler(self, event=None):
+        event = json.loads(event)
+        print(event)
+        if event["socket_id"]:
+            self.app.socket_id = str(event["socket_id"])
+            self.init_pusher()
+        else:
+            pusherClient.connect()
 
     def job_assignments(self, job):
         print("Job Assignments", job)
@@ -423,7 +427,7 @@ class ShScreen(QWidget):
 
     def toggle_online_offline(self):
         if self.host_active:
-            pusherClient.unsubscribe(self.app.token + ".job_assignments")
+            pusherClient.unsubscribe(job_channel)
             status = 'inactive'
             self.active_switcher.setChecked(False)
             self.bottom.setStyleSheet("background:red;")
@@ -431,7 +435,7 @@ class ShScreen(QWidget):
             self.host_active = False
 
         else:
-            pusherClient.subscribe(self.app.token + ".job_assignments")
+            pusherClient.subscribe(job_channel)
             status = 'active'
             self.active_switcher.setChecked(True)
             self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
@@ -454,5 +458,5 @@ class ShScreen(QWidget):
         pass
 
     def logout(self):
-        pusherClient.unsubscribe(self.app.token + ".job_assignments")
+        pusherClient.unsubscribe(job_channel)
         self.app.logout()

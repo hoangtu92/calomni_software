@@ -105,15 +105,15 @@ class Api:
 
                     return result['data']
                 else:
-                    self.show_error(result['message'], self.app.start_timer)
+                    self.show_error(result['message'])
             else:
                 self.app.log.debug(result)
-                self.show_error("Invalid data received", self.app.start_timer)
+                self.show_error("Invalid data received")
 
         # Bad request
         elif resp.status_code == 400:
             result = resp.json()
-            self.show_error(result["message"], self.app.start_timer)
+            self.show_error(result["message"])
 
         # Unauthenticated
         elif resp.status_code == 401:
@@ -122,7 +122,7 @@ class Api:
         # Everything else
         else:
             self.app.log.debug(resp.json())
-            self.show_error("Error: %s\n%s" % (resp.status_code, resp.reason), self.app.start_timer)
+            self.show_error("Error: %s\n%s" % (resp.status_code, resp.reason))
 
         return False
 
@@ -147,7 +147,7 @@ class Api:
             return self.response(resp)
 
         except:
-            self.show_error("Connection error", self.app.start_timer)
+            self.show_error("Connection error")
             return False
 
     '''put request'''
@@ -163,7 +163,7 @@ class Api:
             return self.response(resp)
 
         except:
-            self.show_error("Connection error", self.app.start_timer)
+            self.show_error("Connection error")
             return False
 
     '''post request'''
@@ -179,7 +179,7 @@ class Api:
             return self.response(resp)
 
         except:
-            self.show_error("Connection error", self.app.start_timer)
+            self.show_error("Connection error")
             return False
 
     '''upload'''
@@ -200,7 +200,7 @@ class Api:
             return self.response(resp)
 
         except:
-            self.show_error("Connection error", self.app.start_timer)
+            self.show_error("Connection error")
             return False
 
     @staticmethod
@@ -254,7 +254,7 @@ class Api:
             return self.response(resp)
 
         except:
-            self.show_error("Connection error", self.app.start_timer)
+            self.show_error("Connection error")
             return False
 
     @staticmethod
