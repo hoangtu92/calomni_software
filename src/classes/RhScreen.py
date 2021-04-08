@@ -2,14 +2,12 @@ import json
 import os
 import re
 import queue
-import shutil
 import threading
-import time
 from os.path import dirname, abspath
 from zipfile import ZipFile
 
 import pycurl
-from PyQt5.QtCore import QSize, QThread, QTimer
+from PyQt5.QtCore import QSize, QTimer
 from src.api.Api import download
 from PyQt5 import uic, QtCore
 from PyQt5.QtGui import QPixmap, QIcon
@@ -21,6 +19,7 @@ import magic
 from src.api.Pusher import pusherClient, pusherServer, job_channel
 from src.classes.Helper import Helper
 from src.classes.Log import Log
+
 
 class RhScreen(QWidget):
     app = None
@@ -34,7 +33,6 @@ class RhScreen(QWidget):
     callback_queue = queue.Queue()
     timer = QTimer()
     emitter = QtCore.pyqtSignal(object)
-    jobs = []
     online_hosts = []
 
     def __init__(self, app):
@@ -83,15 +81,14 @@ class RhScreen(QWidget):
         self.emitter.connect(self.on_event_callback)
 
     def initializing(self):
-        pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
-        self.get_job_list()
         self.log = Log(self.app)
         self.log.info("Starting application", self.console)
-        self.log.info("Retrieving job list", self.console)
-        self.log.info("Retrieving Logs", self.console)
-        self.get_job_logs()
 
-        self.get_software_list()
+        pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
+
+        threading.Thread(target=self.get_job_list).start()
+        threading.Thread(target=self.get_job_logs).start()
+        threading.Thread(target=self.get_software_list).start()
 
     def connection_handler(self, event=None):
         event = json.loads(event)
@@ -120,13 +117,13 @@ class RhScreen(QWidget):
         print("Member Removed", event)
         member = json.loads(event)
         del self.online_hosts[self.online_hosts.index(member["user_id"])]
-        self.emitter.emit({"action": "member_online", "data": event})
+        self.emitter.emit({"action": "member_online", "data": member})
 
     def member_added(self, event):
         print("Member Added", event)
         member = json.loads(event)
         self.online_hosts.append(member["user_id"])
-        self.emitter.emit({"action": "member_online", "data": event})
+        self.emitter.emit({"action": "member_online", "data": member})
 
     def job_handle(self, event):
         print("Job status changed", event)
@@ -134,9 +131,32 @@ class RhScreen(QWidget):
         self.emitter.emit({"action": "job_status", "data": event})
 
     @QtCore.pyqtSlot(object)
-    def on_event_callback(self, arg):
-        print("Internal Event", arg)
-        self.show_job_list(arg)
+    def on_event_callback(self, event):
+        print("Internal Event", event)
+        data = event["data"]
+        if event["action"] == "member_online" or event["action"] == "job_status" or event["action"] == "job_list":
+            self.show_job_list(event)
+        if event["action"] == "job_log":
+            self.job_log.clear()
+            for j in data:
+                try:
+                    self.job_log.append("%s: %s\n"
+                                        "Software: %s\n"
+                                        "Status: %s\n"
+                                        "Fee: $NT%s\n"
+                                        "Duration: %s\n"
+                                        "------------------------------------------------------------------------\n"
+                                        % (j['start'], j['host_info'], j['software_name'], j['status'], j['cost'],
+                                           j['duration']))
+                except:
+                    pass
+
+        if event["action"] == "software_list":
+            self.clear_software()
+            for s in data:
+                # print(s)
+                self.software.addItem(s['name'], s['id'])
+
 
     def set_step(self, step):
         self.current_step = step
@@ -172,30 +192,14 @@ class RhScreen(QWidget):
                         self.set_step(5)
 
     def get_software_list(self):
-        self.log.info("Getting software list", self.console)
         sw = self.app.api.get("/software/list")
         if sw:
-            self.clear_software()
-            for s in sw:
-                # print(s)
-                self.software.addItem(s['name'], s['id'])
+            self.emitter.emit({"action": "software_list", "data": sw})
 
     def get_job_logs(self):
         r = self.app.api.get("/host/logs")
         if r:
-            self.job_log.clear()
-            for j in r:
-                try:
-                    self.job_log.append("%s: %s\n"
-                                        "Software: %s\n"
-                                        "Status: %s\n"
-                                        "Fee: $NT%s\n"
-                                        "Duration: %s\n"
-                                        "------------------------------------------------------------------------\n"
-                                        % (j['start'], j['host_info'], j['software_name'], j['status'], j['cost'],
-                                           j['duration']))
-                except:
-                    pass
+            self.emitter.emit({"action": "job_log", "data": r})
 
     def software_selected(self):
         self.refresh()
@@ -246,16 +250,13 @@ class RhScreen(QWidget):
                     self.job_summary.append("Duration: %s" % j['duration'])
 
     def get_job_list(self):
-
-        self.jobs = self.app.api.get("/job/list")
-        print("Getting job list\n")
-        if self.jobs:
-            self.show_job_list()
+        jobs = self.app.api.get("/job/list")
+        self.emitter.emit({"action": "job_list", "data": jobs})
 
     def show_job_list(self, args=None):
         self.job_list.setRowCount(0)
         row = 0
-        for j in self.jobs:
+        for j in args["data"]:
             self.job_list.insertRow(self.job_list.rowCount())
 
             if "created_at" in j:
@@ -292,9 +293,12 @@ class RhScreen(QWidget):
             if "price" in j:
                 self.job_list.setItem(row, 3, QtWidgets.QTableWidgetItem("$NT %s" % j['price']))
             if "status" in j:
-                status = j["status"]
+
                 if args is not None and args["action"] == "job_status" and str(args["data"]["job_id"]) == str(j["id"]):
-                    status = args["data"]["status"]
+                    j["status"] = args["data"]["status"]
+
+                status = j["status"]
+
                 self.job_list.setItem(row, 4, QtWidgets.QTableWidgetItem(status))
 
                 group = QtWidgets.QWidget()

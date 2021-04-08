@@ -86,6 +86,7 @@ class Software(QWidget):
 
                     if submit_result['status']:
                         self.status.setText("Verified")
+                        self.status.setStyleSheet("padding: 5;color: lime")
                         return
 
                 self.status.setText("UnVerified")

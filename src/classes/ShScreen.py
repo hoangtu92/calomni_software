@@ -1,14 +1,13 @@
 import logging
-import multiprocessing
 import os, platform, re, shutil, json
-import shlex
 import signal
 import subprocess
 import urllib
 import webbrowser
-from multiprocessing import Pool, cpu_count, current_process, active_children
+from multiprocessing import Pool, cpu_count, current_process
 from os.path import dirname, abspath
 from shutil import make_archive
+from threading import Thread
 from zipfile import ZipFile
 
 from PyQt5.QtGui import QPixmap, QIcon
@@ -18,11 +17,12 @@ from PyQt5 import uic, QtCore
 from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QPushButton, QLineEdit, QLabel, \
     QVBoxLayout
 
-from src.api.Pusher import pusherServer, pusherClient, device_token, job_channel
+from src.api.Pusher import pusherServer, pusherClient, job_channel
 from src.classes.Software import Software
 from src.classes.Alert import Alert
 from src.classes.Config import Config
 from src.classes.Switcher import Switcher
+
 
 def update_task(job_id, status, pid=None, file_name=None):
     fields = {
@@ -36,12 +36,13 @@ def update_task(job_id, status, pid=None, file_name=None):
     try:
         print(fields)
         r = Api.silence_upload("/job/%s/update_task" % job_id, fields)
-        #print("raw", r.json())
+        # print("raw", r.json())
         return r.json()
     except:
         print("update failed")
         return False
         pass
+
 
 def run_job(j):
     p = current_process()
@@ -54,7 +55,8 @@ def run_job(j):
     # Begin the task
     t = update_task(j['id'], "running", p.pid)
     print("Job is running", t["data"])
-    pusherServer.trigger(job_channel, j["rh_token"] + ".job_running", {"status": "running", "job_id": t["data"]["job_id"]})
+    pusherServer.trigger(job_channel, j["rh_token"] + ".job_running",
+                         {"status": "running", "job_id": t["data"]["job_id"]})
 
     # Save file
     job_file = download(j['file_url'])
@@ -78,7 +80,8 @@ def run_job(j):
 
         print("Running ", command)
 
-        proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=path, shell=True)
+        proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                cwd=path, shell=True)
 
         pid = proc.stdout.readline().strip().decode()
         update_task(j['id'], "running", pid)
@@ -95,7 +98,8 @@ def run_job(j):
             make_archive(path, 'zip', path)
             t = update_task(j['id'], 'completed', None, file_name)
             print("Job completed")
-            pusherServer.trigger(job_channel, j["rh_token"] + ".job_completed", {"status": "completed", "job_id": t["data"]["job_id"]})
+            pusherServer.trigger(job_channel, j["rh_token"] + ".job_completed",
+                                 {"status": "completed", "job_id": t["data"]["job_id"]})
 
         # Clean working directory
         os.remove(file_name)
@@ -108,6 +112,7 @@ class ShScreen(QWidget):
     items = 0
     cols = 4
     pool = Pool(cpu_count())
+    emitter = QtCore.pyqtSignal(object)
 
     def __init__(self, app):
         self.app = app
@@ -209,17 +214,18 @@ class ShScreen(QWidget):
         self.cols = round(self.width() / 200)
 
         self.software_list.setColumnStretch(self.cols + 1, 1)
+        self.emitter.connect(self.on_event_callback)
 
     def initializing(self):
-        self.get_host_info()
         pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
-        self.get_software_list()
-        self.get_affiliates()
-        pass
+        Thread(target=self.get_host_info).start()
+        Thread(target=self.get_software_list).start()
+        Thread(target=self.get_affiliates).start()
 
     def init_pusher(self):
         channel = pusherClient.subscribe(job_channel)
         channel.bind(self.app.token + ".job_assignments", self.job_assignments)
+        channel.bind("App\\Events\\SoftwareUpdatedEvent", lambda event: self.emitter.emit({"action": "software_updated", "data": json.loads(event)}))
         channel.bind(self.app.token + ".job_stop", self.job_stop)
         self.fetch_jobs()
 
@@ -245,13 +251,23 @@ class ShScreen(QWidget):
         except Exception as e:
             print(e)
         else:
-            print("Terminated %s" % task["pid"] )
+            print("Terminated %s" % task["pid"])
 
+    def on_event_callback(self, event):
+        data = event["data"]
+        if event["action"] == "software_updated":
+            print("Software updated", event)
+            Alert(event["message"], "Warning", self.get_software_list)
+        if event["action"] == "software_list":
+            for s in data:
+                # print(s)
+                sw = Software(self, s)
+                self.append_software(sw)
 
-    def get_affiliates(self):
-        r = self.app.api.get("/affiliates")
-        if r:
-            for a in r:
+            self.software_list.setRowStretch(self.items / self.cols + 1, 1)
+
+        if event["action"] == "affiliates_list":
+            for a in data:
                 ads = QPushButton()
                 pxm = QPixmap()
                 pxm.loadFromData(urllib.request.urlopen(a["image"]).read())
@@ -261,6 +277,22 @@ class ShScreen(QWidget):
                 ads.clicked.connect(lambda: self.go_to_ads(a["url"]))
                 self.affiliates.addWidget(ads)
                 pass
+        if event["action"] == "host_info":
+            if data['status'] == 'active':
+                self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
+                self.status.setText("Status: Active")
+                self.active_switcher.setChecked(True)
+                self.host_active = True
+            else:
+                self.host_active = False
+                self.bottom.setStyleSheet("background:red;")
+                self.active_switcher.setChecked(False)
+                self.status.setText("Status: Inactive")
+
+    def get_affiliates(self):
+        r = self.app.api.get("/affiliates")
+        if r:
+            self.emitter.emit({"action": "affiliates_list", "data": r})
 
     def go_to_ads(self, url):
         webbrowser.open(url)
@@ -309,13 +341,7 @@ class ShScreen(QWidget):
         soft = self.app.api.get("/software/sh_list", params)
 
         if soft:
-
-            for s in soft:
-                # print(s)
-                sw = Software(self, s)
-                self.append_software(sw)
-
-        self.software_list.setRowStretch(self.items / self.cols + 1, 1)
+            self.emitter.emit({"action": "software_list", "data": soft})
 
     def get_host_info(self):
         r = self.app.api.get("/host/item/%s" % self.app.token)
@@ -324,18 +350,7 @@ class ShScreen(QWidget):
             if r:
                 self.get_host_info()
         else:
-            if r['status'] == 'active':
-                self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
-                self.status.setText("Status: Active")
-                self.active_switcher.setChecked(True)
-                self.host_active = True
-            else:
-                self.host_active = False
-                self.bottom.setStyleSheet("background:red;")
-                self.active_switcher.setChecked(False)
-                self.status.setText("Status: Inactive")
-
-        return r
+            self.emitter.emit({"action": "host_info", "data": r})
 
     def registering_host(self):
 
@@ -397,7 +412,7 @@ class ShScreen(QWidget):
             idx = 0
 
         if idx == self.software_list.count() - 1:
-            # Alert("Successfully saved!")
+            #Alert("Successfully saved!")
             return
 
         software = self.software_list.itemAt(idx).widget()
@@ -413,7 +428,7 @@ class ShScreen(QWidget):
             idx = 0
 
         if idx == self.software_list.count():
-            Alert("Successfully saved!")
+            #Alert("Successfully saved!")
             return
 
         software = self.software_list.itemAt(idx).widget()
@@ -442,8 +457,6 @@ class ShScreen(QWidget):
             self.active_switcher.setChecked(True)
             self.bottom.setStyleSheet("background: rgba(123, 255, 56, 186);")
             self.status.setText("Status: Active")
-
-
 
         self.app.api.post("/host/item/%s" % self.app.token, {"status": status})
 
