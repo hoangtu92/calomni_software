@@ -1,14 +1,13 @@
 import atexit
 
 from PyQt5.QtWidgets import QApplication
-#from tendo.singleton import SingleInstance
+from tendo.singleton import SingleInstance
 
 from src.classes.App import App, exit_handler
 
-#me = SingleInstance()
+me = SingleInstance()
 
 if __name__ == '__main__':
-    #x = me.initialized
 
     app = QApplication([])
     a = App(app)
