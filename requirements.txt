@@ -7,3 +7,5 @@ pycurl~=7.43.0.6
 pyinstaller~=4.1
 pusher~=3.0.0
 Pysher~=1.0.6
+requests_toolbelt
+tendo~=0.2.15

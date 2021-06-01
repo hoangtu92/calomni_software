@@ -257,7 +257,7 @@ class ShScreen(QWidget):
         data = event["data"]
         if event["action"] == "software_updated":
             print("Software updated", event)
-            Alert(event["message"], "Warning", self.get_software_list)
+            Alert(data["message"], "Warning", self.get_software_list)
         if event["action"] == "software_list":
             for s in data:
                 # print(s)

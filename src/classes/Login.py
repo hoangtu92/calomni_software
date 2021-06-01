@@ -58,8 +58,10 @@ class Login(QWidget):
                 else:
                     pusherClient.connect()
 
+    @staticmethod
     def register(self):
         webbrowser.open("https://calomni.com")
 
+    @staticmethod
     def forgotPW(self, link):
         webbrowser.open(link)

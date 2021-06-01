@@ -1,4 +1,5 @@
-import os, pycurl
+import os
+import pycurl
 
 import magic
 import requests
@@ -7,6 +8,7 @@ from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
 from src.classes.Config import Config
 
 mime = magic.Magic(mime=True)
+
 
 def download(url):
     return requests.get(url, allow_redirects=True).content
@@ -20,6 +22,7 @@ class FileReader:
 
     def read_callback(self, size):
         return self.callback(self.file, size)
+
 
 class Api:
     apiUrl = "https://calomni.com/api"
@@ -171,7 +174,7 @@ class Api:
 
         try:
             resp = requests.post(self.url(endpoint), data=data, files=files,
-                             headers={"Accept": "application/json", "Authorization": "Bearer " + self.bearer})
+                                 headers={"Accept": "application/json", "Authorization": "Bearer " + self.bearer})
 
             return self.response(resp)
 
@@ -239,7 +242,6 @@ class Api:
         except:
             return False
 
-
     '''delete request'''
 
     def delete(self, endpoint):
@@ -305,7 +307,7 @@ class Api:
             c.setopt(pycurl.XFERINFOFUNCTION, progress)
             c.setopt(pycurl.PROGRESSFUNCTION, progress)
 
-        c.perform()         # this kicks off the pycurl module with all options set.
+        c.perform()  # this kicks off the pycurl module with all options set.
         c.close()
 
         return c

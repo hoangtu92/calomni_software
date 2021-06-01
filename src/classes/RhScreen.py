@@ -3,6 +3,7 @@ import os
 import re
 import queue
 import threading
+import webbrowser
 from os.path import dirname, abspath
 from zipfile import ZipFile
 
@@ -307,7 +308,7 @@ class RhScreen(QWidget):
                 if status == 'completed':
                     dl = QtWidgets.QPushButton()
                     dl.setIcon(QIcon("./src/gui/images/medium/download.png"))
-                    dl.clicked.connect(lambda state, x=j['id']: self.download_report(x))
+                    dl.clicked.connect(lambda state, x=j['job_uid']: self.download_report(x))
                     dl.setFixedSize(16, 16)
                     dl.setToolTip("Download report")
                     dl.setFlat(True)
@@ -560,24 +561,10 @@ class RhScreen(QWidget):
             self.get_job_list()
         pass
 
-    def download_report(self, job_id):
+    def download_report(self, job_uid):
 
-        # job_id = self.get_selected_job_id(job_id)
-
-        # job_id = self.job_list.item(row, 0)
-        # print("Selected Job ID %s" % job_id)
-        self.log.info("Downloading job report...", self.console)
-        j = self.app.api.get("/job/%s/download_report" % job_id)
-
-        if j:
-            report = download(j['download_url'])
-            f = re.findall(r"(\w+).zip$", j['file_url'])
-
-            path = self.app.home_dir + "/reports/" + f[0]
-            file_name = path + '.zip'
-            open(file_name, "wb").write(report)
-            self.log.info("Report file has been saved at %s" % file_name, self.console, True)
-            self.set_step(9)
+        self.set_step(9)
+        webbrowser.open_new_tab("https://calomni.com/job/download-result/%s" % job_uid)
 
     def reselect_host(self, software_id, select_box):
         host = self.app.api.get("/software/%s/verified-hosts" % software_id)
