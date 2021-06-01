@@ -3,12 +3,12 @@ from PyInstaller.utils.hooks import copy_metadata
 
 block_cipher = None
 
-data = [('/home/calomni/PycharmProjects/calomni/src/gui', 'src/gui')]
+data = [('/home/hoangtu92/PycharmProjects/calomni_software/src/gui', 'src/gui')]
 data.extend(copy_metadata("tendo"))  # <-- the fix
 
 
 a = Analysis(['calomni.py'],
-             pathex=['/home/calomni/PycharmProjects/calomni'],
+             pathex=['/home/hoangtu/PycharmProjects/calomni_software'],
              binaries=[],
              datas=data,
              hiddenimports=[],
