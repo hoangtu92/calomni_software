@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import QWidget, QDesktopWidget, QComboBox, QLabel, QLineEdi
 from PyQt5 import QtWidgets
 import magic
 
-from src.api.Pusher import pusherClient, pusherServer, job_channel
+from src.api.Pusher import pusher_client, pusher_server, job_channel
 from src.classes.Helper import Helper
 from src.classes.Log import Log
 
@@ -47,6 +47,10 @@ class RhScreen(QWidget):
         qr = self.frameGeometry()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
+
+        self.pusherClient = pusher_client()
+        self.pusherServer = pusher_server()
+        self.pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
 
         self.steps = {
             1: self.findChild(QLabel, "step1"),
@@ -84,8 +88,7 @@ class RhScreen(QWidget):
     def initializing(self):
         self.log = Log(self.app)
         self.log.info("Starting application", self.console)
-
-        pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
+        self.pusherClient.connect()
 
         threading.Thread(target=self.get_job_list).start()
         threading.Thread(target=self.get_job_logs).start()
@@ -98,18 +101,19 @@ class RhScreen(QWidget):
             self.app.socket_id = str(event["socket_id"])
             self.init_pusher()
         else:
-            pusherClient.connect()
+            self.pusherClient.connect()
 
     def init_pusher(self):
-        channel = pusherClient.subscribe(job_channel)
+        channel = self.pusherClient.subscribe(job_channel)
         channel.bind("pusher_internal:subscription_succeeded", self.subscription_succeeded)
         channel.bind("pusher_internal:member_added", self.member_added)
         channel.bind("pusher_internal:member_removed", self.member_removed)
+
         channel.bind(self.app.token + '.job_completed', self.job_handle)
         channel.bind(self.app.token + '.job_running', self.job_handle)
 
     def subscription_succeeded(self, event):
-        event  = json.loads(event)
+        event = json.loads(event)
         print("subscription_succeeded", event)
         self.online_hosts = event["presence"]["ids"]
         self.emitter.emit({"action": "member_online", "data": event})
@@ -133,9 +137,11 @@ class RhScreen(QWidget):
 
     @QtCore.pyqtSlot(object)
     def on_event_callback(self, event):
-        print("Internal Event", event)
+        #print("Internal Event", event)
         data = event["data"]
-        if event["action"] == "member_online" or event["action"] == "job_status" or event["action"] == "job_list":
+        if event["action"] == "job_status" or event["action"] == "member_online":
+            self.get_job_list()
+        if event["action"] == "job_list":
             self.show_job_list(event)
         if event["action"] == "job_log":
             self.job_log.clear()
@@ -216,6 +222,7 @@ class RhScreen(QWidget):
             self.get_hosts(software_id)
 
     def get_hosts(self, software_id):
+
         host = self.app.api.get("/software/%d/verified-hosts" % software_id)
         if host:
             self.clear_host()
@@ -255,9 +262,12 @@ class RhScreen(QWidget):
         self.emitter.emit({"action": "job_list", "data": jobs})
 
     def show_job_list(self, args=None):
-        self.job_list.setRowCount(0)
         row = 0
+        self.job_list.setRowCount(0)
+
+
         for j in args["data"]:
+
             self.job_list.insertRow(self.job_list.rowCount())
 
             if "created_at" in j:
@@ -274,10 +284,12 @@ class RhScreen(QWidget):
                 g.setToolTip(j["host_info"])
                 g.setToolTipDuration(600000)
 
-                if j['host_activity_status'] == 'active' or j["sh_token"] in self.online_hosts:
+                if j["sh_token"] in self.online_hosts:
+                    print({"token": j["sh_token"], "online": self.online_hosts})
                     pxm = QPixmap("./src/gui/images/medium/online.png")
                     s.setPixmap(pxm.scaled(8, 8, QtCore.Qt.KeepAspectRatio))
                 else:
+
                     pxm = QPixmap("./src/gui/images/medium/offline.png")
                     s.setPixmap(pxm.scaled(8, 8, QtCore.Qt.KeepAspectRatio))
 
@@ -293,10 +305,8 @@ class RhScreen(QWidget):
 
             if "price" in j:
                 self.job_list.setItem(row, 3, QtWidgets.QTableWidgetItem("$NT %s" % j['price']))
-            if "status" in j:
 
-                if args is not None and args["action"] == "job_status" and str(args["data"]["job_id"]) == str(j["id"]):
-                    j["status"] = args["data"]["status"]
+            if "status" in j:
 
                 status = j["status"]
 
@@ -488,7 +498,7 @@ class RhScreen(QWidget):
             self.log.info("Job submitted", self.console, True)
 
             # Todo Send event to SH
-            pusherServer.trigger(job_channel, self.current_job["sh_token"] + ".job_assignments", self.current_job)
+            self.pusherServer.trigger(job_channel, self.current_job["sh_token"] + ".job_assignments", self.current_job)
 
             self.clear_form()
             self.set_step(6)
@@ -549,14 +559,14 @@ class RhScreen(QWidget):
         r = self.app.api.post("/job/%s/start" % job_id)
         if r:
             self.log.info("Job started", self.console)
-            pusherServer.trigger(job_channel, r["sh_token"] + ".job_assignments", r)
+            self.pusherServer.trigger(job_channel, r["sh_token"] + ".job_assignments", r)
 
     def stop_job(self, job_id):
         print("stop job id: %s" % job_id)
         r = self.app.api.post("/job/%s/stop" % job_id)
         if r:
             print("Job stopped", r)
-            pusherServer.trigger(job_channel, r["sh_token"] + ".job_stop", r)
+            self.pusherServer.trigger(job_channel, r["sh_token"] + ".job_stop", r)
             self.log.info("Job stopped", self.console)
             self.get_job_list()
         pass
@@ -580,9 +590,9 @@ class RhScreen(QWidget):
         job = self.app.api.put("/job/%s/item" % job_id, {"host_id": new_host_id})
         if job:
             # Todo Send event to SH
-            pusherServer.trigger(job_channel, job["sh_token"] + ".job_assignments", job)
+            self.pusherServer.trigger(job_channel, job["sh_token"] + ".job_assignments", job)
             self.get_job_list()
 
     def logout(self):
-        pusherClient.unsubscribe(job_channel)
+        self.pusherClient.unsubscribe(job_channel)
         self.app.logout()

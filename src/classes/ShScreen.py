@@ -17,13 +17,14 @@ from PyQt5 import uic, QtCore
 from PyQt5.QtWidgets import QWidget, QDesktopWidget, QGridLayout, QPushButton, QLineEdit, QLabel, \
     QVBoxLayout
 
-from src.api.Pusher import pusherServer, pusherClient, job_channel
+from src.api.Pusher import pusher_server, pusher_client, job_channel
 from src.classes.Software import Software
 from src.classes.Alert import Alert
 from src.classes.Config import Config
 from src.classes.Switcher import Switcher
 
 
+pusherServer = pusher_server()
 def update_task(job_id, status, pid=None, file_name=None):
     fields = {
         'status': status,
@@ -55,6 +56,7 @@ def run_job(j):
     # Begin the task
     t = update_task(j['id'], "running", p.pid)
     print("Job is running", t["data"])
+    j["status"] = "running"
     pusherServer.trigger(job_channel, j["rh_token"] + ".job_running",
                          {"status": "running", "job_id": t["data"]["job_id"]})
 
@@ -123,6 +125,10 @@ class ShScreen(QWidget):
         qr = self.frameGeometry()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
+
+        # Pusher
+        self.pusherClient = pusher_client()
+        self.pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
 
         self.host_active = True
 
@@ -217,13 +223,15 @@ class ShScreen(QWidget):
         self.emitter.connect(self.on_event_callback)
 
     def initializing(self):
-        pusherClient.connection.bind('pusher:connection_established', self.connection_handler)
+
+        self.pusherClient.connect()
+        print("Pusher connect..")
         Thread(target=self.get_host_info).start()
         Thread(target=self.get_software_list).start()
         Thread(target=self.get_affiliates).start()
 
     def init_pusher(self):
-        channel = pusherClient.subscribe(job_channel)
+        channel = self.pusherClient.subscribe(job_channel)
         channel.bind(self.app.token + ".job_assignments", self.job_assignments)
         channel.bind("App\\Events\\SoftwareUpdatedEvent", lambda event: self.emitter.emit({"action": "software_updated", "data": json.loads(event)}))
         channel.bind(self.app.token + ".job_stop", self.job_stop)
@@ -237,7 +245,7 @@ class ShScreen(QWidget):
                 self.app.socket_id = str(event["socket_id"])
                 self.init_pusher()
             else:
-                pusherClient.connect()
+                self.pusherClient.connect()
 
     def job_assignments(self, job):
         print("Job Assignments", job)
@@ -443,7 +451,7 @@ class ShScreen(QWidget):
 
     def toggle_online_offline(self):
         if self.host_active:
-            pusherClient.unsubscribe(job_channel)
+            self.pusherClient.unsubscribe(job_channel)
             status = 'inactive'
             self.active_switcher.setChecked(False)
             self.bottom.setStyleSheet("background:red;")
@@ -474,5 +482,5 @@ class ShScreen(QWidget):
         pass
 
     def logout(self):
-        pusherClient.unsubscribe(job_channel)
+        self.pusherClient.unsubscribe(job_channel)
         self.app.logout()

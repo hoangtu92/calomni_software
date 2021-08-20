@@ -8,7 +8,7 @@ data.extend(copy_metadata("tendo"))  # <-- the fix
 
 
 a = Analysis(['calomni.py'],
-             pathex=['/home/hoangtu/PycharmProjects/calomni_software'],
+             pathex=['/home/hoangtu92/PycharmProjects/calomni_software'],
              binaries=[],
              datas=data,
              hiddenimports=[],

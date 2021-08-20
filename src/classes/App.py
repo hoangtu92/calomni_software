@@ -5,7 +5,6 @@ from pathlib import Path
 from PyQt5.QtWidgets import QWidget
 
 from src.api.Api import Api
-from src.api.Pusher import pusherClient
 from src.classes.Config import Config
 from src.classes.Helper import Helper
 from src.classes.Log import Log
@@ -29,7 +28,6 @@ class App(QWidget):
     sh_screen = None
     pInfo = None
     socket_id = ""
-
 
     def __init__(self, main):
         QWidget.__init__(self)
@@ -56,7 +54,6 @@ class App(QWidget):
         if not os.path.isdir(self.home_dir + "/logs/"):
             os.mkdir(self.home_dir + "/logs/")
 
-
         self.api = Api(self)
         self.log = Log(self)
         self.mac = gma()
@@ -80,8 +77,6 @@ class App(QWidget):
                 elif user['role'] == 'sh':
                     self.sh_screen.show()
                     self.sh_screen.initializing()
-
-                pusherClient.connect()
 
 
         else:

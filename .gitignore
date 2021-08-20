@@ -3,5 +3,5 @@ venv
 dist
 build
 **/__pycache__/
-calomni_software.tar.xz
+api
 

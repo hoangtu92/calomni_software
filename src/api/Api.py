@@ -61,7 +61,7 @@ class Api:
                 Config.save_token(self.bearer)
                 user = self.get("/user")
                 if user:
-                    self.app.log.debug("User info: %s" % user)
+                    # self.app.log.debug("User info: %s" % user)
                     self.user = user
                     return True
 
@@ -101,7 +101,7 @@ class Api:
         # Success
         if resp.status_code == 200 or resp.status_code == 201:
             result = resp.json()
-            print(result)
+            # print(result)
             if 'status' in result:
                 if result['status']:
                     if "message" in result and result["message"]:
